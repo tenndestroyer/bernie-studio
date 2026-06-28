@@ -21,7 +21,16 @@ def main():
     ap.add_argument("--target", type=int, default=86, help="agency score target")
     ap.add_argument("--cycles", type=int, default=2, help="writers'-room revision cycles")
     ap.add_argument("--config", action="store_true", help="print config and exit")
+    ap.add_argument("--series", action="store_true",
+                    help="FULLY AUTONOMOUS: auto-pick and build the next episode, forever")
+    ap.add_argument("--max", type=int, default=None, help="(with --series) stop after N episodes")
     a = ap.parse_args()
+
+    # autonomous series mode: keep making the next episode until the season is done
+    if a.series:
+        import series
+        series.run_series(max_episodes=a.max)
+        return
 
     if a.slot: os.environ["BERNIE_SLOT"] = a.slot
     os.environ["BERNIE_EP"] = a.name
@@ -29,11 +38,13 @@ def main():
     print(config.summary())
     if a.config: return
 
-    # optionally generate a fresh long story first (writes this slot's episode.json)
-    if a.generate:
+    # generate a fresh story only if this slot has none yet (so re-runs RESUME the render)
+    if a.generate and not (config.WORK / "episode.json").exists():
         import episode2
         episode2.PREMISE = a.generate
         episode2.main(target_scenes=a.scenes)
+    elif a.generate:
+        print("episode.json already exists for this slot -> resuming render (not regenerating story)")
 
     # full director-driven build (uses episode.json if present, else the built-in pilot)
     import direct_episode

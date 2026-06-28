@@ -52,6 +52,17 @@ Make a **new** episode from any premise:
 python make.py --slot ep3 --name Bernie_Ep3 --generate "Bernie and Rosie get lost in a glowing cave" --scenes 14
 ```
 
+### 🤖 Fully-autonomous Series Mode
+```bat
+python make.py --series
+```
+This **auto-picks the next un-made episode** from the built-in 12-episode Season 1 plan, builds it
+completely (story → 22-agent direction → voices → songs → render → review → final cut), then moves
+to the **next episode automatically** — hands-off, forever, until the whole season is done. It's
+**resumable at every level**: a crash or PC restart just continues from the next unfinished episode
+(tracked in `series_state.json`), and each episode's render resumes mid-way via `progress.json`.
+Edit the `SEASON` list in `bernie/series.py` to write your own episodes.
+
 ## ⚙️ Hardware auto-scaling (tiers)
 
 On first run it picks a tier from your VRAM (override with `BERNIE_TIER`):
