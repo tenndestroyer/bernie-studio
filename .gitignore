@@ -1,0 +1,21 @@
+# downloaded engine + models + all generated output (50GB+) — never committed
+BernieStudioData/
+*.mp4
+*.mp3
+*.wav
+*.png
+*.safetensors
+*.pth
+*.ckpt
+# secrets
+keys.env
+hf_token.txt
+*_key.txt
+# python
+__pycache__/
+*.pyc
+.venv/
+# logs / scratch
+logs/
+*.log
+_*.py
