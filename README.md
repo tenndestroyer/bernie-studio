@@ -36,16 +36,18 @@ friends), but the whole system is reusable for any preschool-style show. Everyth
 
 ## 🚀 Quick start
 
+**Just double-click `run.bat`.** That's the whole thing.
+
 ```bat
 git clone https://github.com/<you>/bernie-studio
 cd bernie-studio
-set HF_TOKEN=hf_xxx            REM optional, for FLUX.1-dev
-run.bat                        REM first run auto-installs EVERYTHING (~50 GB), then builds an episode
+run.bat                        REM <- double-click this
 ```
 
-That's it. `run.bat` detects your hardware, installs ComfyUI + cu128 PyTorch + all models +
-custom nodes + Ollama LLMs on first run, then makes the pilot episode. Subsequent runs skip
-straight to making episodes.
+On the **first run** it asks for your (free) HuggingFace token, then auto-installs **everything**
+(ComfyUI + cu128 PyTorch + all models + custom nodes + Ollama LLMs, ~50 GB), detecting your
+hardware as it goes. Then it **starts the fully-autonomous series** and keeps building the whole
+season by itself — episode after episode, hands-off. Every later double-click just continues.
 
 Make a **new** episode from any premise:
 ```bat
