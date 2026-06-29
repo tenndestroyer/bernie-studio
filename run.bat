@@ -1,21 +1,23 @@
 @echo off
 REM ============================================================================
-REM  Bernie Studio - ONE-CLICK. Double-click this file.
-REM  First run: guides setup, auto-installs EVERYTHING (engine, models, LLMs),
-REM  then starts the FULLY AUTONOMOUS series - making the whole season by itself.
+REM  Bernie Studio - ONE-CLICK.  Double-click this file (after downloading the
+REM  repo to your PC - you cannot run it from the GitHub website).
+REM  First run: installs EVERYTHING, then starts the autonomous series.
 REM ============================================================================
 setlocal enabledelayedexpansion
 title Bernie Studio
 cd /d "%~dp0"
 
-if not exist "BernieStudioData\.installed" (
+if "%BERNIE_HOME%"=="" ( set "HOMEDIR=%~dp0BernieStudioData" ) else ( set "HOMEDIR=%BERNIE_HOME%" )
+
+if not exist "%HOMEDIR%\.installed" (
   echo.
   echo ============================================================
   echo    BERNIE STUDIO  -  first-time setup
   echo ============================================================
   echo.
   echo  The image model ^(FLUX.1-dev^) needs a FREE HuggingFace token.
-  echo    1^) get one:    https://huggingface.co/settings/tokens
+  echo    1^) get one:        https://huggingface.co/settings/tokens
   echo    2^) accept license: https://huggingface.co/black-forest-labs/FLUX.1-dev
   echo.
   if not exist "keys.env" (
@@ -31,18 +33,23 @@ if not exist "BernieStudioData\.installed" (
   echo  Installing engine, models and LLMs (~50 GB, one time). Grab a coffee...
   echo.
   powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
-  if errorlevel 1 ( echo Setup hit a problem - see messages above. & pause & exit /b 1 )
+  if errorlevel 1 ( echo. & echo  *** Setup hit a problem - see messages above. *** & echo. & pause & exit /b 1 )
 )
 
-if "%~1"=="" (
-  echo.
-  echo ============================================================
-  echo    Starting the AUTONOMOUS SERIES - making the whole season!
-  echo    ^(It will keep building the next episode by itself.^)
-  echo ============================================================
-  echo.
-  python "%~dp0make.py" --series
-) else (
-  python "%~dp0make.py" %*
-)
+REM use the bundled Python from setup (falls back to system python if missing)
+set "PYEXE=%HOMEDIR%\python_embeded\python.exe"
+if not exist "%PYEXE%" set "PYEXE=python"
+
+echo.
+echo ============================================================
+echo    Starting the AUTONOMOUS SERIES - making the whole season!
+echo    (It keeps building the next episode by itself.)
+echo ============================================================
+echo.
+if "%~1"=="" ( "%PYEXE%" "%~dp0make.py" --series ) else ( "%PYEXE%" "%~dp0make.py" %* )
+
+echo.
+echo ============================================================
+echo    Bernie Studio has stopped. See messages above.
+echo ============================================================
 pause

@@ -25,6 +25,22 @@ $tier = if ($env:BERNIE_TIER) { $env:BERNIE_TIER }
 Say "Detected GPU VRAM=${vram}GB, RAM=${ram}GB  ->  quality tier: $tier"
 if ($vram -lt 8) { Say "WARNING: <8GB VRAM detected. Rendering will be very slow." }
 
+# ---------- 0b. prerequisites (git, ffmpeg) via winget ----------
+function Need($exe, $wingetId) {
+  if (Get-Command $exe -ErrorAction SilentlyContinue) { return }
+  Say "installing prerequisite: $exe ..."
+  try { winget install -e --id $wingetId --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null }
+  catch { Say "could not auto-install $exe - please install it manually." }
+}
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+  Say "WARNING: winget not found. Please install git + ffmpeg manually if the next steps fail."
+}
+Need "git" "Git.Git"
+Need "ffmpeg" "Gyan.FFmpeg"
+# refresh PATH in this session so the just-installed tools are usable
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+            [System.Environment]::GetEnvironmentVariable("Path","User")
+
 # ---------- 1. tools: 7-Zip (from GitHub mirror; 7-zip.org is often blocked) ----------
 $SZ = Join-Path $HOMEDIR "7zip\7z.exe"
 if (-not (Test-Path $SZ)) {

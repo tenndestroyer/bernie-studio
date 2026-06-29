@@ -36,13 +36,22 @@ friends), but the whole system is reusable for any preschool-style show. Everyth
 
 ## 🚀 Quick start
 
-**Just double-click `run.bat`.** That's the whole thing.
+> ⚠️ **You can't run it from this GitHub web page.** First get the files onto your PC, *then*
+> double-click `run.bat`. Two ways:
 
+**Option A — Download ZIP (no tools needed):**
+1. Click the green **`< > Code`** button at the top of the repo → **Download ZIP**
+2. **Right-click the ZIP → Extract All** (run it from a real folder, not inside the ZIP)
+3. Open the extracted folder and **double-click `run.bat`**
+
+**Option B — git clone:**
 ```bat
-git clone https://github.com/<you>/bernie-studio
+git clone https://github.com/tenndestroyer/bernie-studio
 cd bernie-studio
-run.bat                        REM <- double-click this
+run.bat
 ```
+
+That's the whole thing — **double-click `run.bat`**.
 
 On the **first run** it asks for your (free) HuggingFace token, then auto-installs **everything**
 (ComfyUI + cu128 PyTorch + all models + custom nodes + Ollama LLMs, ~50 GB), detecting your
