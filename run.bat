@@ -42,14 +42,19 @@ if not exist "%PYEXE%" set "PYEXE=python"
 
 echo.
 echo ============================================================
-echo    Starting the AUTONOMOUS SERIES - making the whole season!
-echo    (It keeps building the next episode by itself.)
+echo    Launching BERNIE STUDIO - opening the app in your browser
+echo    (Create episodes, watch renders live, start the season.)
 echo ============================================================
 echo.
-if "%~1"=="" ( "%PYEXE%" "%~dp0make.py" --series ) else ( "%PYEXE%" "%~dp0make.py" %* )
+echo    If your browser doesn't open, go to:  http://127.0.0.1:8787
+echo.
+REM  No args  -> launch the desktop GUI (the front door).
+REM  Any args -> pass straight to make.py (e.g. run.bat --series).
+if "%~1"=="" ( "%PYEXE%" "%~dp0bernie\gui.py" ) else ( "%PYEXE%" "%~dp0make.py" %* )
 
 echo.
 echo ============================================================
 echo    Bernie Studio has stopped. See messages above.
+echo    (Any renders you started keep running in the background.)
 echo ============================================================
 pause

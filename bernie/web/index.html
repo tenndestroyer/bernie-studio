@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Bernie Studio</title>
+<style>
+  :root{
+    --bg:#0e1016; --panel:#171a23; --panel2:#1e222e; --line:#2a2f3d;
+    --text:#e9ecf1; --muted:#9aa2b1; --accent:#ef6a3d; --accent2:#f5b301;
+    --good:#46c98b; --warn:#f5b301; --bad:#ef5b5b; --info:#5b9bef;
+    --radius:14px; --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:radial-gradient(1200px 600px at 80% -10%, #1a1f2e 0%, var(--bg) 60%);
+       color:var(--text);font:14px/1.5 'Segoe UI',system-ui,Arial,sans-serif;}
+  a{color:var(--info);text-decoration:none}
+  .app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+  /* sidebar */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:6px}
+  .brand{display:flex;align-items:center;gap:10px;margin:4px 6px 18px}
+  .brand h1{font-size:17px;margin:0;letter-spacing:.3px}
+  .brand small{color:var(--muted);font-weight:400}
+  .navbtn{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--muted);
+          cursor:pointer;border:1px solid transparent;user-select:none}
+  .navbtn:hover{background:var(--panel2);color:var(--text)}
+  .navbtn.active{background:linear-gradient(90deg,rgba(239,106,61,.18),rgba(239,106,61,.04));
+                 color:var(--text);border-color:rgba(239,106,61,.35)}
+  .navbtn .ico{width:18px;text-align:center}
+  .side .spacer{flex:1}
+  .pill{font-size:12px;color:var(--muted);padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+  .pill b{color:var(--text)}
+  /* main */
+  .main{padding:22px 26px;overflow:auto}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:14px;flex-wrap:wrap}
+  .topbar h2{margin:0;font-size:22px}
+  .top-stats{display:flex;gap:10px;flex-wrap:wrap}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:96px}
+  .stat .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .stat .v{font-size:16px;font-weight:600;margin-top:2px}
+  .grid{display:grid;gap:16px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 12px;font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px}
+  .card h3 .tag{margin-left:auto;font-size:11px;color:var(--muted);font-weight:400}
+  .gauge{display:flex;align-items:center;gap:14px}
+  .ring{--p:0;--c:var(--accent);width:74px;height:74px;border-radius:50%;flex:none;
+        background:conic-gradient(var(--c) calc(var(--p)*1%), #262b38 0);display:grid;place-items:center}
+  .ring::before{content:'';width:56px;height:56px;border-radius:50%;background:var(--panel)}
+  .ring span{position:absolute;font-size:14px;font-weight:700}
+  .gauge .meta .big{font-size:20px;font-weight:700}
+  .gauge .meta .sub{color:var(--muted);font-size:12px}
+  .bar{height:9px;background:#262b38;border-radius:6px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%}
+  .muted{color:var(--muted)}
+  .row{display:flex;align-items:center;gap:10px}
+  .between{justify-content:space-between}
+  .badge{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .badge.on{color:var(--good);border-color:rgba(70,201,139,.4);background:rgba(70,201,139,.08)}
+  .badge.off{color:var(--muted)}
+  .badge.run{color:var(--accent2);border-color:rgba(245,179,1,.4);background:rgba(245,179,1,.08)}
+  /* slots */
+  .slot{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);margin-bottom:12px}
+  .slot .t{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .slot .t b{font-size:15px}
+  .slot .sub{color:var(--muted);font-size:12px;margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:12px}
+  .thumbs:empty{display:none}
+  .thumb{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0a0c11;position:relative;aspect-ratio:16/9}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .ph{width:100%;height:100%;display:grid;place-items:center;color:#3a4150;font-size:11px}
+  .thumb .lab{position:absolute;left:0;right:0;bottom:0;font-size:9px;padding:2px 4px;background:rgba(0,0,0,.6);
+              display:flex;justify-content:space-between}
+  .thumb .lab .dot{width:7px;height:7px;border-radius:50%}
+  /* forms */
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px;text-transform:uppercase;letter-spacing:.4px}
+  input[type=text],input[type=number],textarea,select{
+     width:100%;background:#11141d;border:1px solid var(--line);border-radius:10px;color:var(--text);
+     padding:10px 12px;font:inherit}
+  textarea{min-height:90px;resize:vertical}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+  .sliderrow{display:grid;grid-template-columns:1fr 46px;gap:10px;align-items:center}
+  .sliderrow .val{text-align:right;font-weight:700;color:var(--accent2)}
+  .btn{background:linear-gradient(90deg,var(--accent),#f08a3d);color:#1a1206;border:none;border-radius:10px;
+       padding:11px 18px;font-weight:700;cursor:pointer;font-size:14px}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .btn.danger{background:transparent;color:var(--bad);border:1px solid rgba(239,91,91,.4)}
+  .btn.small{padding:7px 12px;font-size:12px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{padding:7px 12px;border:1px solid var(--line);border-radius:20px;cursor:pointer;color:var(--muted);user-select:none;font-size:13px}
+  .chip.sel{background:rgba(239,106,61,.16);border-color:rgba(239,106,61,.45);color:var(--text)}
+  .toast{position:fixed;right:18px;bottom:18px;background:var(--panel2);border:1px solid var(--line);
+         border-left:4px solid var(--accent);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow);
+         max-width:380px;opacity:0;transform:translateY(8px);transition:.25s;z-index:50}
+  .toast.show{opacity:1;transform:none}
+  .logbox{background:#0a0c11;border:1px solid var(--line);border-radius:10px;padding:12px;height:60vh;overflow:auto;
+          font:12px/1.5 Consolas,monospace;white-space:pre-wrap;color:#cfe3d6}
+  .section{display:none}
+  .section.active{display:block}
+  .castgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  .cast{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+  .cast .dot{width:34px;height:34px;border-radius:50%;display:inline-grid;place-items:center;font-size:18px;margin-bottom:8px}
+  .note{background:rgba(91,155,239,.08);border:1px solid rgba(91,155,239,.3);border-radius:10px;padding:11px 14px;color:#cfe0ff;font-size:13px}
+  .warnbox{background:rgba(245,179,1,.07);border:1px solid rgba(245,179,1,.3);border-radius:10px;padding:11px 14px;color:#ffe7a8;font-size:13px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);font-size:13px}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="side">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#23283a"/>
+        <ellipse cx="24" cy="27" rx="13" ry="12" fill="#2b2016"/>
+        <ellipse cx="14" cy="20" rx="5" ry="7" fill="#1c140c"/><ellipse cx="34" cy="20" rx="5" ry="7" fill="#1c140c"/>
+        <path d="M16 27 q8 9 16 0" fill="#fff"/><ellipse cx="24" cy="24" rx="6" ry="7" fill="#fff"/>
+        <circle cx="20" cy="23" r="2" fill="#1a120a"/><circle cx="28" cy="23" r="2" fill="#1a120a"/>
+        <circle cx="24" cy="29" r="2.4" fill="#0c0905"/>
+        <path d="M12 36 q12 7 24 0 v3 q-12 6 -24 0z" fill="#ef6a3d"/></svg>
+      <div><h1>Bernie Studio</h1><small>AI Animation Studio</small></div>
+    </div>
+    <div class="navbtn active" data-tab="dashboard"><span class="ico">📊</span> Dashboard</div>
+    <div class="navbtn" data-tab="create"><span class="ico">🎬</span> Create Episode</div>
+    <div class="navbtn" data-tab="story"><span class="ico">📖</span> Story Builder</div>
+    <div class="navbtn" data-tab="cast"><span class="ico">🐾</span> Characters</div>
+    <div class="navbtn" data-tab="library"><span class="ico">🎞️</span> Library</div>
+    <div class="navbtn" data-tab="logs"><span class="ico">📜</span> Logs</div>
+    <div class="navbtn" data-tab="settings"><span class="ico">⚙️</span> Settings</div>
+    <div class="navbtn" data-tab="install"><span class="ico">📦</span> Install</div>
+    <div class="spacer"></div>
+    <div class="pill">Engine <b id="pill-backend">…</b><br/>Tier <b id="pill-tier">…</b></div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="topbar">
+      <h2 id="page-title">Dashboard</h2>
+      <div class="top-stats">
+        <div class="stat"><div class="k">GPU</div><div class="v" id="ts-gpu">—</div></div>
+        <div class="stat"><div class="k">VRAM</div><div class="v" id="ts-vram">—</div></div>
+        <div class="stat"><div class="k">Disk free</div><div class="v" id="ts-disk">—</div></div>
+        <div class="stat"><div class="k">Engine</div><div class="v" id="ts-comfy">—</div></div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section class="section active" id="tab-dashboard">
+      <div class="grid cards" style="margin-bottom:16px">
+        <div class="card"><h3>🖥️ GPU <span class="tag" id="gpu-name">—</span></h3>
+          <div class="gauge"><div class="ring" id="gpu-ring"><span id="gpu-util">—</span></div>
+            <div class="meta"><div class="big" id="gpu-mem">—</div><div class="sub">VRAM used</div>
+              <div class="sub" id="gpu-temp"></div></div></div>
+        </div>
+        <div class="card"><h3>🧠 Memory & CPU</h3>
+          <div class="row between"><span class="muted">System RAM</span><b id="d-ram">—</b></div>
+          <div class="row between" style="margin-top:8px"><span class="muted">CPU cores</span><b id="d-cpu">—</b></div>
+          <div class="row between" style="margin-top:8px"><span class="muted">Quality tier</span><b id="d-tier">—</b></div>
+          <div class="row between" style="margin-top:8px"><span class="muted">Video res</span><b id="d-wan">—</b></div>
+        </div>
+        <div class="card"><h3>💾 Storage</h3>
+          <div class="row between" style="margin-bottom:8px"><span class="muted">Free</span><b id="d-diskfree">—</b></div>
+          <div class="bar"><i id="d-diskbar"></i></div>
+          <div class="sub muted" id="d-diskpath" style="margin-top:8px;font-size:12px"></div>
+        </div>
+        <div class="card"><h3>📈 Season</h3>
+          <div class="row between"><span class="muted">Episodes done</span><b id="d-seasondone">—</b></div>
+          <div class="bar" style="margin:10px 0"><i id="d-seasonbar"></i></div>
+          <div class="sub muted" id="d-seasonnext" style="font-size:12px"></div>
+          <button class="btn small" style="margin-top:12px" onclick="startSeries()">▶ Start Autonomous Series</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🎬 Render Queue <span class="tag"><button class="btn small danger" onclick="stopAll()">Stop all</button></span></h3>
+        <div id="slots"><div class="muted">No renders yet. Create an episode to begin.</div></div>
+      </div>
+    </section>
+
+    <!-- CREATE -->
+    <section class="section" id="tab-create">
+      <div class="card" style="max-width:880px">
+        <h3>🎬 Create a new episode</h3>
+        <div class="note">The AI writers' room (22 agents) expands your settings into a full original script,
+          then voices, scores, renders and edits it — all locally, all automatic. The render is resumable.</div>
+        <div class="form-grid">
+          <div><label>Episode name</label><input type="text" id="c-name" value="Bernie_Ep3"></div>
+          <div><label>Work slot (folder)</label><input type="text" id="c-slot" value="ep3"></div>
+        </div>
+        <label>Premise / what happens (the more you give, the better)</label>
+        <textarea id="c-premise" placeholder="e.g. Sky the Pteranodon challenges everyone to a flying race, but learns cheering friends on beats showing off. Lesson: lift others up. Dino fact: Pteranodon glided on the wind like a paper airplane."></textarea>
+        <div class="form-grid">
+          <div><label>Scenes <span class="muted">(≈1 min each)</span></label>
+            <div class="sliderrow"><input type="range" id="c-scenes" min="6" max="20" value="14" oninput="v('c-scenes')"><div class="val" id="c-scenes-v">14</div></div></div>
+          <div><label>Quality target (agency score)</label>
+            <div class="sliderrow"><input type="range" id="c-target" min="78" max="94" value="86" oninput="v('c-target')"><div class="val" id="c-target-v">86</div></div></div>
+        </div>
+        <div class="form-grid">
+          <div><label>Comedy</label><div class="sliderrow"><input type="range" id="c-comedy" min="0" max="10" value="6" oninput="v('c-comedy')"><div class="val" id="c-comedy-v">6</div></div></div>
+          <div><label>Adventure</label><div class="sliderrow"><input type="range" id="c-adv" min="0" max="10" value="6" oninput="v('c-adv')"><div class="val" id="c-adv-v">6</div></div></div>
+          <div><label>Emotion / heart</label><div class="sliderrow"><input type="range" id="c-emo" min="0" max="10" value="7" oninput="v('c-emo')"><div class="val" id="c-emo-v">7</div></div></div>
+          <div><label>Writers'-room revision cycles</label><div class="sliderrow"><input type="range" id="c-cycles" min="1" max="4" value="2" oninput="v('c-cycles')"><div class="val" id="c-cycles-v">2</div></div></div>
+        </div>
+        <label>Quality tier override</label>
+        <select id="c-tier">
+          <option value="">Auto (recommended — uses detected hardware)</option>
+          <option value="low">low — 640×368 (fastest)</option>
+          <option value="balanced">balanced — 832×480</option>
+          <option value="high">high — 1280×720</option>
+          <option value="ultra">ultra — 1280×720 fp16 (24GB+)</option>
+        </select>
+        <div class="row" style="margin-top:18px;gap:12px">
+          <button class="btn" onclick="createEpisode()">🎬 Generate Episode</button>
+          <button class="btn ghost" onclick="nav('story')">📖 Use Story Builder instead</button>
+        </div>
+        <div class="warnbox" style="margin-top:14px">Honest note: output is a polished <b>cute-stylized-3D AI cartoon</b> (great stills, good AI-video motion) — not hand-rigged Pixar. Full render is hours→overnight depending on tier.</div>
+      </div>
+    </section>
+
+    <!-- STORY BUILDER -->
+    <section class="section" id="tab-story">
+      <div class="card" style="max-width:880px">
+        <h3>📖 Story Builder</h3>
+        <p class="muted">Pick the ingredients — the AI turns them into a rich, original, age-appropriate story.</p>
+        <label>Spotlight character</label><div class="chips" id="sb-char"></div>
+        <label>Setting / world</label><div class="chips" id="sb-place"></div>
+        <label>Theme & adventure</label><div class="chips" id="sb-theme"></div>
+        <label>Life lesson</label><div class="chips" id="sb-lesson"></div>
+        <label>Your own twist (optional)</label>
+        <input type="text" id="sb-extra" placeholder="e.g. a glowing cave map, a lost baby bird, a surprise rainstorm">
+        <label>Preview premise</label>
+        <textarea id="sb-out" readonly></textarea>
+        <div class="row" style="margin-top:16px;gap:12px">
+          <button class="btn" onclick="useStory()">✓ Send to Episode Creator</button>
+          <button class="btn ghost" onclick="buildStory()">↻ Regenerate</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAST -->
+    <section class="section" id="tab-cast">
+      <div class="card"><h3>🐾 The Valley Pals — canonical cast</h3>
+        <p class="muted">Continuity anchors used across every episode so characters stay consistent.</p>
+        <div class="castgrid" id="castgrid"></div>
+      </div>
+    </section>
+
+    <!-- LIBRARY -->
+    <section class="section" id="tab-library">
+      <div class="card"><h3>🎞️ Episode Library</h3>
+        <table><thead><tr><th>Episode</th><th>Size</th><th>Finished</th><th></th></tr></thead>
+          <tbody id="libbody"><tr><td colspan="4" class="muted">No finished episodes yet.</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <!-- LOGS -->
+    <section class="section" id="tab-logs">
+      <div class="card"><h3>📜 Live Logs
+        <span class="tag"><select id="logsel" onchange="loadLog()" style="width:auto"></select>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin:0 0 0 12px;text-transform:none"><input type="checkbox" id="logfollow" checked style="width:auto"> follow</label></span></h3>
+        <div class="logbox" id="logbox">select a log…</div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="section" id="tab-settings">
+      <div class="card" style="max-width:760px"><h3>⚙️ Settings</h3>
+        <div class="note" id="set-summary" style="font-family:Consolas,monospace;font-size:12px">…</div>
+        <label>HuggingFace token <span class="muted">(for the FLUX image model — free)</span></label>
+        <input type="text" id="s-hf" placeholder="hf_… (leave blank to keep current)">
+        <div class="form-grid">
+          <div><label>Cerebras API key <span class="muted">(optional, free)</span></label><input type="text" id="s-cb" placeholder="csk_…"></div>
+          <div><label>Groq API key <span class="muted">(optional, free)</span></label><input type="text" id="s-gq" placeholder="gsk_…"></div>
+        </div>
+        <label>Quality tier override</label>
+        <select id="s-tier">
+          <option value="">Auto-detect from hardware</option>
+          <option value="low">low</option><option value="balanced">balanced</option>
+          <option value="high">high</option><option value="ultra">ultra</option>
+        </select>
+        <label>Storage / models folder (BERNIE_HOME)</label>
+        <input type="text" id="s-home" placeholder="e.g. D:\BernieData (put the ~50GB of models on another drive)">
+        <div class="row" style="margin-top:18px"><button class="btn" onclick="saveSettings()">💾 Save settings</button></div>
+        <p class="muted" style="margin-top:10px;font-size:12px">Keys are written to <code>keys.env</code> (gitignored — never uploaded). Tier/home changes apply to the next render.</p>
+      </div>
+    </section>
+
+    <!-- INSTALL -->
+    <section class="section" id="tab-install">
+      <div class="card" style="max-width:820px"><h3>📦 Installation Wizard</h3>
+        <div id="install-state"></div>
+        <p class="muted">First-run setup downloads the engine (ComfyUI), the right PyTorch for your GPU
+          (CUDA for NVIDIA, DirectML for AMD/Intel, CPU fallback), all models (Flux, Wan 2.2, ACE-Step,
+          upscaler) and the local Ollama LLMs — about 50 GB. It auto-detects your hardware.</p>
+        <div class="row" style="gap:12px;margin:14px 0">
+          <button class="btn" id="installbtn" onclick="runInstall()">⬇ Install / Repair everything</button>
+          <button class="btn ghost" onclick="loadLog('gui_install')">View install log</button>
+        </div>
+        <div class="logbox" id="installlog" style="height:42vh">No install run yet.</div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------------- data ----------------
+const CHARS = [
+  ["Bernie","🐶","brave, kind Bernese Mountain Dog puppy — the heart of the group","#7a5230"],
+  ["Pip","🐞","tiny, excitable ladybug best friend — small but mighty","#d23b3b"],
+  ["Tumble","🦕","goofy, clumsy Stegosaurus with a big bouncy tail","#5aa15a"],
+  ["Rosie","🦏","sweet, shy baby Triceratops with honking sneezes","#d98cb0"],
+  ["Sky","🦅","cool, confident Pteranodon who loves to glide","#5b9bef"],
+  ["Grandpa Rex","🦖","gentle, wise elder T-Rex with tiny arms, big heart","#8a6d3b"],
+  ["Maple","🐢","slow, patient old tortoise who tells the best stories","#3b8a6d"],
+];
+const PLACES=["Dino Valley","the Tall Trees grove","the Whispering Cave","Giggle-Flower meadow","Sparkle Waterfall","the Sleepy Volcano","Berry Hill","the starry campsite"];
+const THEMES=["a quest adventure","a gentle mystery","a big race","a rescue","a festival","a rainy-day surprise","a treasure hunt","a counting & sharing day"];
+const LESSONS=["a stranger is just a friend you haven't met","being shy is okay — good friends help you bloom","teamwork beats showing off","patience and helping others","everyone is important, no matter how small","your differences are special gifts","facing small fears with friends","sharing and fairness"];
+const SB={char:"Sky",place:"Dino Valley",theme:"a big race",lesson:"teamwork beats showing off"};
+
+// ---------------- helpers ----------------
+const $=id=>document.getElementById(id);
+async function api(path,method,body){
+  const o={method:method||'GET',headers:{'Content-Type':'application/json'}};
+  if(body)o.body=JSON.stringify(body);
+  const r=await fetch(path,o); return r.json();
+}
+function toast(msg,ms=3200){const t=$('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),ms);}
+function v(id){$(id+'-v').textContent=$(id).value;}
+function nav(tab){
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  $('tab-'+tab).classList.add('active');
+  $('page-title').textContent={dashboard:'Dashboard',create:'Create Episode',story:'Story Builder',
+    cast:'Characters',library:'Library',logs:'Logs',settings:'Settings',install:'Install'}[tab];
+  if(tab==='settings')loadSettings(); if(tab==='logs')refreshLogList(); if(tab==='library')refreshLibrary();
+}
+document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>nav(b.dataset.tab));
+
+// ---------------- dashboard ----------------
+const OPEN=new Set();
+const cssid=s=>String(s).replace(/[^a-z0-9]/gi,'_');
+function fmtAge(s){if(s==null)return '';if(s<90)return s+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
+function toggleShots(slot){ if(OPEN.has(slot)){OPEN.delete(slot);const el=$('thumbs-'+cssid(slot));if(el)el.innerHTML='';}
+  else {OPEN.add(slot);loadShots(slot);} }
+async function loadShots(slot){
+  const el=$('thumbs-'+cssid(slot)); if(!el)return;
+  let d; try{d=await api('/api/shots?slot='+encodeURIComponent(slot));}catch(e){return;}
+  const dot=s=>s==='done'?'var(--good)':String(s).startsWith('fail')?'var(--bad)':s==='key'?'var(--accent2)':'#3a4150';
+  el.innerHTML=(d.shots||[]).map(sh=>{
+    const img=sh.key?`<img loading="lazy" src="/api/thumb?slot=${encodeURIComponent(slot)}&id=${sh.id}" alt="${sh.id}">`
+                    :`<div class="ph">${sh.id}</div>`;
+    return `<div class="thumb" title="${sh.id}: ${(sh.desc||'').replace(/"/g,'')}">${img}
+      <div class="lab"><span>${sh.id}</span><span class="dot" style="background:${dot(sh.status)}"></span></div></div>`;
+  }).join('')||'<div class="muted" style="grid-column:1/-1">no shots yet</div>';
+}
+async function refresh(){
+  let s; try{s=await api('/api/status');}catch(e){return;}
+  const sy=s.system, g=sy.gpu||{};
+  $('pill-backend').textContent=sy.backend; $('pill-tier').textContent=sy.tier;
+  $('ts-gpu').textContent=g.util!=null?g.util+'%':sy.vendor;
+  $('ts-vram').textContent=sy.vram_gb?sy.vram_gb+' GB':'—';
+  $('ts-disk').textContent=sy.disk.free_gb!=null?sy.disk.free_gb+' GB':'—';
+  $('ts-comfy').textContent=sy.comfy_up?'● up':'○ idle';
+  $('gpu-name').textContent=sy.vendor.toUpperCase()+' · '+sy.backend;
+  const util=g.util!=null?g.util:0;
+  const ring=$('gpu-ring'); ring.style.setProperty('--p',util);
+  ring.style.setProperty('--c', util>80?'var(--bad)':util>40?'var(--accent2)':'var(--good)');
+  $('gpu-util').textContent=g.util!=null?util+'%':'n/a';
+  $('gpu-mem').textContent=g.mem_used!=null?`${(g.mem_used/1024).toFixed(1)} / ${(g.mem_total/1024).toFixed(1)} GB`:`${sy.vram_gb} GB`;
+  $('gpu-temp').textContent=g.temp!=null?g.temp+'°C':'';
+  $('d-ram').textContent=sy.ram_gb+' GB'; $('d-cpu').textContent=sy.cpu_count;
+  $('d-tier').textContent=sy.tier; $('d-wan').textContent=sy.wan;
+  const dk=sy.disk; $('d-diskfree').textContent=(dk.free_gb||'—')+' GB free of '+(dk.total_gb||'—')+' GB';
+  $('d-diskbar').style.width=(dk.used_pct||0)+'%'; $('d-diskpath').textContent=s.summary.split('HOME=')[1]||'';
+  // season
+  const plan=s.season.plan||[], done=plan.filter(p=>p.done).length;
+  $('d-seasondone').textContent=`${done} / ${plan.length}`;
+  $('d-seasonbar').style.width=(plan.length?100*done/plan.length:0)+'%';
+  $('d-seasonnext').textContent=s.season.next?('Next up: Ep'+s.season.next.n+' — '+s.season.next.title):'Season complete 🎉';
+  // slots
+  const slots=s.slots||[]; const host=$('slots');
+  if(!slots.length){host.innerHTML='<div class="muted">No renders yet. Create an episode to begin.</div>';}
+  else host.innerHTML=slots.map(sl=>{
+    const pct=Math.round(sl.frac*100), kpct=sl.total?Math.round(100*sl.key_done/sl.total):0;
+    const st=sl.final_exists?'<span class="badge on">done</span>':
+      sl.active?'<span class="badge run">'+sl.phase+'</span>':'<span class="badge off">idle '+fmtAge(sl.idle_secs)+'</span>';
+    const cid=cssid(sl.slot);
+    return `<div class="slot"><div class="t"><b>${sl.title} <span class="muted">(${sl.slot})</span></b>${st}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="sub"><span>🎬 video ${sl.vid_done}/${sl.total} (${pct}%)</span>
+        <span>🖼️ keyframes ${sl.key_done}/${sl.total} (${kpct}%)</span>
+        ${sl.failed?`<span style="color:var(--bad)">⚠ ${sl.failed} failed</span>`:''}
+        <a href="#" onclick="toggleShots('${sl.slot}');return false" style="margin-left:auto">${OPEN.has(sl.slot)?'▾ hide shots':'▸ view shots'}</a></div>
+      <div class="thumbs" id="thumbs-${cid}"></div></div>`;
+  }).join('');
+  OPEN.forEach(loadShots);   // re-populate any expanded grids after the poll re-renders
+}
+
+// ---------------- actions ----------------
+async function createEpisode(){
+  const lvl=(n,id)=>['barely any','a little','some','plenty of','lots of','tons of'][Math.min(5,Math.floor($(id).value/2))];
+  const flav=` Tone: ${lvl(0,'c-comedy')} comedy, ${lvl(0,'c-adv')} adventure, and a strong emotional heart.`;
+  const body={name:$('c-name').value,slot:$('c-slot').value,
+    premise:($('c-premise').value.trim()? $('c-premise').value.trim()+flav : ''),
+    scenes:+$('c-scenes').value,target:+$('c-target').value,cycles:+$('c-cycles').value,tier:$('c-tier').value};
+  if(!body.premise){toast('Add a premise (or use the Story Builder).');return;}
+  const r=await api('/api/create','POST',body);
+  if(r.ok){toast('🎬 Episode "'+r.name+'" started — watch it on the Dashboard.');nav('dashboard');}
+  else toast('Failed: '+(r.error||'unknown'));
+}
+async function startSeries(){const r=await api('/api/series','POST',{});
+  toast(r.ok?'▶ Autonomous series started — building the season.':'Failed: '+(r.error||''));nav('dashboard');}
+async function stopAll(){if(!confirm('Stop all running renders? (Resumable — you can restart later.)'))return;
+  const r=await api('/api/stop','POST',{});toast('Stopped '+(r.killed||[]).length+' job(s).');}
+async function runInstall(){$('installbtn').disabled=true;
+  const r=await api('/api/install','POST',{});
+  toast(r.ok?'Installer started — follow progress below.':'Failed: '+(r.error||''));
+  if(r.ok){const t=setInterval(()=>loadLog('gui_install','installlog'),3000);setTimeout(()=>clearInterval(t),600000);}
+  setTimeout(()=>$('installbtn').disabled=false,4000);}
+
+// ---------------- story builder ----------------
+function chipset(host,arr,key){$(host).innerHTML=arr.map(x=>
+  `<div class="chip ${SB[key]===x?'sel':''}" onclick="pick('${key}','${host}',this)">${x}</div>`).join('');}
+function pick(key,host,el){SB[key]=el.textContent;el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');buildStory();}
+function buildStory(){
+  const extra=$('sb-extra').value.trim();
+  const p=`The Valley Pals go on ${SB.theme} in ${SB.place}, with ${SB.char} in the spotlight.`+
+    (extra?` Twist: ${extra}.`:'')+` Lesson: ${SB.lesson}. Include a gentle real dino/nature fact, songs, and a warm ending.`;
+  $('sb-out').value=p;
+}
+function useStory(){$('c-premise').value=$('sb-out').value;
+  const slug=(SB.char.split(' ')[0]).toLowerCase();
+  toast('Sent to Episode Creator ✓');nav('create');}
+
+// ---------------- cast / settings / logs / library ----------------
+function renderCast(){$('castgrid').innerHTML=CHARS.map(c=>
+  `<div class="cast"><div class="dot" style="background:${c[3]}33">${c[1]}</div>
+    <b>${c[0]}</b><div class="muted" style="margin-top:5px;font-size:13px">${c[2]}</div></div>`).join('');}
+async function loadSettings(){const s=await api('/api/settings');
+  $('set-summary').textContent=s.summary;
+  $('s-hf').placeholder=s.keys.HF_TOKEN?('current: '+s.keys.HF_TOKEN):'hf_… (none set)';
+  $('s-cb').placeholder=s.keys.CEREBRAS_API_KEY?('current: '+s.keys.CEREBRAS_API_KEY):'csk_… (none set)';
+  $('s-gq').placeholder=s.keys.GROQ_API_KEY?('current: '+s.keys.GROQ_API_KEY):'gsk_… (none set)';
+  $('s-tier').value=''; }
+async function saveSettings(){const body={HF_TOKEN:$('s-hf').value,CEREBRAS_API_KEY:$('s-cb').value,
+  GROQ_API_KEY:$('s-gq').value,BERNIE_TIER:$('s-tier').value,BERNIE_HOME:$('s-home').value};
+  const r=await api('/api/settings','POST',body);toast(r.ok?'💾 Saved.':'Failed.');}
+let CURLOG='comfy_server';
+async function refreshLogList(){const s=await api('/api/status');const sel=$('logsel');
+  const cur=sel.value||CURLOG;sel.innerHTML=(s.logs||[]).map(n=>`<option ${n===cur?'selected':''}>${n}</option>`).join('');
+  if(s.logs&&s.logs.length){CURLOG=sel.value;loadLog();}}
+async function loadLog(name,box){const n=name||$('logsel').value||CURLOG;CURLOG=n;
+  const r=await api('/api/logs?name='+encodeURIComponent(n)+'&n=300');
+  const el=$(box||'logbox');const follow=$('logfollow')?$('logfollow').checked:true;
+  el.textContent=(r.lines||[]).join('\n')||'(empty)';if(follow)el.scrollTop=el.scrollHeight;}
+async function refreshLibrary(){const s=await api('/api/status');const lib=s.library||[];
+  $('libbody').innerHTML=lib.length?lib.map(e=>{const d=new Date(e.mtime*1000);
+    return `<tr><td><b>${e.name}</b></td><td>${e.size_mb} MB</td><td class="muted">${d.toLocaleString()}</td>
+      <td><span class="muted" style="font-size:12px">${e.file}</span></td></tr>`;}).join('')
+    :'<tr><td colspan="4" class="muted">No finished episodes yet.</td></tr>';}
+
+// ---------------- boot ----------------
+chipset('sb-char',CHARS.map(c=>c[0]),'char');chipset('sb-place',PLACES,'place');
+chipset('sb-theme',THEMES,'theme');chipset('sb-lesson',LESSONS,'lesson');
+renderCast();buildStory();refresh();setInterval(refresh,4000);
+setInterval(()=>{if($('tab-logs').classList.contains('active')&&$('logfollow').checked)loadLog();},4000);
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 # 🐶 Bernie Studio
 
 **An autonomous, fully-local AI pipeline that writes, directs, voices, scores, renders, and
-edits a complete animated kids' episode — from one command.**
+edits a complete animated kids' episode — now with a desktop app, from one click.**
 
 It generates *"Bernie & the Dino Valley Pals"* (a Bernese Mountain Dog puppy and his dinosaur
 friends), but the whole system is reusable for any preschool-style show. Everything runs on
@@ -62,8 +62,29 @@ That's the whole thing — **double-click `run.bat`**.
 
 On the **first run** it asks for your (free) HuggingFace token, then auto-installs **everything**
 (ComfyUI + cu128 PyTorch + all models + custom nodes + Ollama LLMs, ~50 GB), detecting your
-hardware as it goes. Then it **starts the fully-autonomous series** and keeps building the whole
-season by itself — episode after episode, hands-off. Every later double-click just continues.
+hardware as it goes. Then it **opens the Bernie Studio desktop app** in your browser.
+
+## 🖼️ The desktop app (GUI)
+
+No command line required. `run.bat` (or `Bernie Studio.bat` after install) launches a local app at
+**`http://127.0.0.1:8787`** — a clean, dark, single-page studio that drives the whole pipeline:
+
+- **Dashboard** — live system health (GPU utilisation/VRAM/temp, RAM, disk, quality tier), every
+  render's progress with a **per-shot keyframe thumbnail grid**, and season progress.
+- **Create Episode** — a form (premise, scenes, comedy/adventure/emotion sliders, quality tier) that
+  hands your idea to the 22-agent writers' room and launches a resumable render.
+- **Story Builder** — pick a spotlight character, setting, theme and life-lesson; it assembles an
+  original premise for you.
+- **Characters** — the canonical Valley Pals cast (continuity reference).
+- **Library / Logs / Settings / Install** — browse finished episodes, tail live logs, save API keys
+  (to gitignored `keys.env`), and run/repair the installer — all from the UI.
+
+It's **dependency-free** (Python stdlib only — no Electron, no npm, no CDN; works offline) and binds to
+`127.0.0.1` only. The old CLI still works for power users (`python make.py …`), and the app's
+**"Start Autonomous Series"** button runs the same hands-off season builder.
+
+> See [`docs/ARCHITECTURE_AND_ROADMAP.md`](docs/ARCHITECTURE_AND_ROADMAP.md) for the full architecture,
+> the AI quality-control design, and an honest prioritized roadmap (what AI video can and cannot do).
 
 Make a **new** episode from any premise:
 ```bat
@@ -118,9 +139,13 @@ BERNIE_HOME=D:\BernieData    # optional: put the 50GB of models/output on anothe
 ```
 bernie-studio/
   bernie/            # the pipeline package (config, agents, director, render, assemble, ...)
+    gui.py           # the desktop app server (stdlib http.server + JSON API)
+    web/index.html   # the single-page UI (no build step, works offline)
   make.py            # CLI entry
   setup.ps1          # first-run auto-installer
-  run.bat            # one-click
+  run.bat            # one-click: first-run install, then launch the app
+  Bernie Studio.bat  # just launch the app (after install)
+  docs/              # architecture & honest roadmap
   BernieStudioData/  # (auto-created, gitignored) engine + models + output
 ```
 
