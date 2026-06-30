@@ -99,8 +99,9 @@ It's **dependency-free** (Python stdlib only — no Electron, no npm, no CDN; wo
 `127.0.0.1` only. The old CLI still works for power users (`python make.py …`), and the app's
 **"Start Autonomous Series"** button runs the same hands-off season builder.
 
-> See [`docs/ARCHITECTURE_AND_ROADMAP.md`](docs/ARCHITECTURE_AND_ROADMAP.md) for the full architecture,
-> the AI quality-control design, and an honest prioritized roadmap (what AI video can and cannot do).
+> See [`docs/ARCHITECTURE_AND_ROADMAP.md`](docs/ARCHITECTURE_AND_ROADMAP.md) for the full architecture and
+> AI quality-control design, and [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) for a
+> 13-expert production-readiness review (per-subsystem scores + an honest "what AI video can and cannot do").
 
 Make a **new** episode from any premise:
 ```bat

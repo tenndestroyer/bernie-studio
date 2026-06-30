@@ -24,32 +24,58 @@ def main():
         print(f"OUTPUT: {final}")
         return
 
-    inputs = ["-i", str(base)]
-    fc = []; idx = 1; mixlabels = ["[0:a]"]
     def span(beat):
         segs = [t for t in timeline if t["beat"]==beat]
         if not segs: return None
         return segs[0]["start"], segs[-1]["start"]+segs[-1]["dur"]
 
-    if under.exists():
-        inputs += ["-stream_loop","-1","-i",str(under)]
-        fc.append(f"[{idx}:a]volume=0.12[bed]"); mixlabels.append("[bed]"); idx+=1
-    if theme.exists():
-        s = span("theme")
-        if s:
-            inputs += ["-i",str(theme)]
-            fc.append(f"[{idx}:a]adelay={int(s[0]*1000)}|{int(s[0]*1000)},volume=0.5[th]"); mixlabels.append("[th]"); idx+=1
-    if song.exists():
-        s = span("song")
-        if s:
-            inputs += ["-i",str(song)]
-            fc.append(f"[{idx}:a]adelay={int(s[0]*1000)}|{int(s[0]*1000)},volume=0.5[sg]"); mixlabels.append("[sg]"); idx+=1
+    def build(ducked):
+        """Build (inputs, filter_complex). When ducked, the underscore bed is
+        sidechain-compressed by the dialogue track so the music drops ~10 dB under
+        speech and swells back in the gaps (broadcast-style), instead of sitting at a
+        flat low volume. A fuller bed (0.28) is safe precisely because it ducks."""
+        inputs = ["-i", str(base)]
+        fc = []; idx = 1
+        if ducked:
+            fc.append("[0:a]asplit=2[vmix][vkey]"); voice = "[vmix]"
+        else:
+            voice = "[0:a]"
+        mixlabels = [voice]
+        if under.exists():
+            inputs += ["-stream_loop","-1","-i",str(under)]
+            if ducked:
+                fc.append(f"[{idx}:a]volume=0.28[bedraw]")
+                fc.append("[bedraw][vkey]sidechaincompress=threshold=0.04:ratio=9:attack=5:release=300[bed]")
+            else:
+                fc.append(f"[{idx}:a]volume=0.12[bed]")
+            mixlabels.append("[bed]"); idx+=1
+        if theme.exists():
+            s = span("theme")
+            if s:
+                inputs += ["-i",str(theme)]
+                fc.append(f"[{idx}:a]adelay={int(s[0]*1000)}|{int(s[0]*1000)},volume=0.5[th]"); mixlabels.append("[th]"); idx+=1
+        if song.exists():
+            s = span("song")
+            if s:
+                inputs += ["-i",str(song)]
+                fc.append(f"[{idx}:a]adelay={int(s[0]*1000)}|{int(s[0]*1000)},volume=0.5[sg]"); mixlabels.append("[sg]"); idx+=1
+        fc.append("".join(mixlabels) + f"amix=inputs={len(mixlabels)}:normalize=0:duration=first[aout]")
+        return inputs, fc
 
-    fc.append("".join(mixlabels) + f"amix=inputs={len(mixlabels)}:normalize=0:duration=first[aout]")
-    subprocess.run(["ffmpeg","-y", *inputs, "-filter_complex",";".join(fc),
+    def render(inputs, fc):
+        return subprocess.run(["ffmpeg","-y", *inputs, "-filter_complex",";".join(fc),
                     "-map","0:v","-map","[aout]","-c:v","copy","-c:a","aac","-b:a","192k",str(final)],
                    capture_output=True, text=True)
-    print(f"OUTPUT (with music): {final}")
+
+    # primary: broadcast-style sidechain ducking; fall back to the simple fixed bed on any ffmpeg error
+    inp, fc = build(ducked=True)
+    r = render(inp, fc)
+    if r.returncode != 0 or not final.exists():
+        print("ducked mix failed; falling back to fixed-volume bed.")
+        inp, fc = build(ducked=False); r = render(inp, fc)
+        print(f"OUTPUT (with music): {final}")
+    else:
+        print(f"OUTPUT (with music + dialogue ducking): {final}")
 
 if __name__ == "__main__":
     main()

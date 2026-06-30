@@ -73,6 +73,36 @@ def _check_python():
     return _check("python>=3.10", ok, f"running {v.major}.{v.minor}.{v.micro}", fixable=False)
 
 
+def _check_embedded_python():
+    """The interpreter the RENDER actually uses (config.PY_EMBED) must be torch-compatible.
+    This is the exact surface behind 'Python is too new / can't install torch'."""
+    if config is None:
+        return _check("engine python + torch", False, "config import failed", fixable=False)
+    py = config.PY_EMBED
+    if not py.exists():
+        return _check("engine python + torch", False,
+                      f"bundled python missing ({py}) — run setup.ps1 (run.bat)", fixable=False)
+    rc, out = _run([str(py), "-c",
+                    "import sys;print('%d.%d.%d'%sys.version_info[:3]);"
+                    "import torch;print(torch.__version__);print(torch.cuda.is_available())"], timeout=90)
+    lines = [l.strip() for l in out.splitlines() if l.strip()]
+    if rc != 0 or len(lines) < 2:
+        return _check("engine python + torch", False,
+                      f"{py.name} can't import torch ({out.strip()[-160:]}) — re-run setup.ps1",
+                      fixable=False)
+    ver, torch_v = lines[0], lines[1]
+    cuda = (len(lines) > 2 and lines[2] == "True")
+    try:
+        maj, minor = (int(x) for x in ver.split(".")[:2])
+        ver_ok = (3, 10) <= (maj, minor) <= (3, 13)
+    except Exception:
+        ver_ok = True
+    detail = f"python {ver}, torch {torch_v}, cuda={cuda}"
+    if not ver_ok:
+        detail += "  [torch needs python 3.10–3.13 — re-run setup.ps1]"
+    return _check("engine python + torch", ver_ok, detail, fixable=False)
+
+
 def _check_tool(tool, fixable=True):
     path = _which(tool)
     return _check(f"{tool} on PATH", bool(path), path or "not found", fixable=(fixable and not path))
@@ -244,6 +274,7 @@ def run(fix=False):
     """
     checks = []
     checks.append(_check_python())
+    checks.append(_check_embedded_python())
     checks.append(_check_tool("ffmpeg"))
     checks.append(_check_tool("git"))
     checks.append(_check_ollama())

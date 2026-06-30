@@ -33,7 +33,7 @@ So wave a little wave, and try a little grin,
 Say hello, say hello, it's the bravest word you know!
 Say hello, say hello, and watch a friendship grow!"""),
     "underscore": dict(
-        seconds=60,
+        seconds=60, takes=3,   # the bed plays under the whole episode -> pick the best of 3
         tags="gentle instrumental underscore, soft ukulele and glockenspiel, warm strings, wholesome, "
              "light, calm, children's show background music, no vocals, no drums, soft",
         lyrics=""),
@@ -67,9 +67,10 @@ def gen_one(name, spec):
     dest = config.MUSIC / f"{name}.mp3"
     if dest.exists() and dest.stat().st_size > 50_000:
         print(f"  {name}.mp3 exists, skip"); return dest
-    print(f"  generating {name} ({spec['seconds']}s, best-of-{TAKES} @ {STEPS} steps)...")
+    n_takes = int(spec.get("takes", TAKES))
+    print(f"  generating {name} ({spec['seconds']}s, best-of-{n_takes} @ {STEPS} steps)...")
     takes = []
-    for k in range(TAKES):
+    for k in range(n_takes):
         seed = (zlib.crc32(name.encode()) + k*104729) % (2**31)
         wf = workflows.ace_step(spec["tags"], spec["lyrics"], spec["seconds"], seed,
                                 f"music_{name}_{k}", steps=STEPS)
