@@ -52,7 +52,12 @@
   .gauge .meta .big{font-size:20px;font-weight:700}
   .gauge .meta .sub{color:var(--muted);font-size:12px}
   .bar{height:9px;background:#262b38;border-radius:6px;overflow:hidden}
-  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width .6s ease}
+  .bar.big{height:18px;border-radius:9px}
+  .prog{display:flex;align-items:center;gap:16px;margin:8px 0 4px}
+  .pct{font-size:32px;font-weight:800;color:var(--accent2);min-width:84px;line-height:1;text-align:right}
+  .pct small{font-size:16px;color:var(--muted);font-weight:600;margin-left:2px}
+  .pct.done{color:var(--good)}
   .muted{color:var(--muted)}
   .row{display:flex;align-items:center;gap:10px}
   .between{justify-content:space-between}
@@ -383,6 +388,8 @@ document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>nav(b.dataset.tab)
 // ---------------- dashboard ----------------
 const OPEN=new Set();
 const cssid=s=>String(s).replace(/[^a-z0-9]/gi,'_');
+const PHASE={keyframes:'🖼️ drawing keyframes',video:'🎬 animating video',assembling:'🎞️ assembling + music',done:'✅ done'};
+function phaseLabel(p){return PHASE[p]||p||'working';}
 function fmtAge(s){if(s==null)return '';if(s<90)return s+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
 function toggleShots(slot){ if(OPEN.has(slot)){OPEN.delete(slot);const el=$('thumbs-'+cssid(slot));if(el)el.innerHTML='';}
   else {OPEN.add(slot);loadShots(slot);} }
@@ -425,16 +432,24 @@ async function refresh(){
   const slots=s.slots||[]; const host=$('slots');
   if(!slots.length){host.innerHTML='<div class="muted">No renders yet. Create an episode to begin.</div>';}
   else host.innerHTML=slots.map(sl=>{
-    const pct=Math.round(sl.frac*100), kpct=sl.total?Math.round(100*sl.key_done/sl.total):0;
+    const opct=(sl.pct!=null?sl.pct:Math.round(sl.frac*100));   // overall 0-100 episode completion
     const st=sl.final_exists?'<span class="badge on">done</span>':
-      sl.active?'<span class="badge run">'+sl.phase+'</span>':'<span class="badge off">idle '+fmtAge(sl.idle_secs)+'</span>';
+      sl.active?'<span class="badge run">'+phaseLabel(sl.phase)+'</span>':'<span class="badge off">idle '+fmtAge(sl.idle_secs)+'</span>';
     const cid=cssid(sl.slot);
     return `<div class="slot"><div class="t"><b>${sl.title} <span class="muted">(${sl.slot})</span></b>${st}</div>
-      <div class="bar"><i style="width:${pct}%"></i></div>
-      <div class="sub"><span>🎬 video ${sl.vid_done}/${sl.total} (${pct}%)</span>
-        <span>🖼️ keyframes ${sl.key_done}/${sl.total} (${kpct}%)</span>
-        ${sl.failed?`<span style="color:var(--bad)">⚠ ${sl.failed} failed</span>`:''}
-        <a href="#" onclick="toggleShots('${sl.slot}');return false" style="margin-left:auto">${OPEN.has(sl.slot)?'▾ hide shots':'▸ view shots'}</a></div>
+      <div class="prog">
+        <div class="pct ${sl.final_exists?'done':''}">${opct}<small>%</small></div>
+        <div style="flex:1">
+          <div class="bar big"><i style="width:${opct}%"></i></div>
+          <div class="sub" style="margin-top:7px">
+            <span>${sl.final_exists?'✅ finished':phaseLabel(sl.phase)}</span>
+            <span>🖼️ keyframes ${sl.key_done}/${sl.total}</span>
+            <span>🎬 video ${sl.vid_done}/${sl.total}</span>
+            ${sl.failed?`<span style="color:var(--bad)">⚠ ${sl.failed} failed</span>`:''}
+            <a href="#" onclick="toggleShots('${sl.slot}');return false" style="margin-left:auto">${OPEN.has(sl.slot)?'▾ hide shots':'▸ view shots'}</a>
+          </div>
+        </div>
+      </div>
       <div class="thumbs" id="thumbs-${cid}"></div></div>`;
   }).join('');
   OPEN.forEach(loadShots);   // re-populate any expanded grids after the poll re-renders

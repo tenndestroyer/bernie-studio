@@ -146,6 +146,15 @@ def _slot_status(work_dir):
         phase = "keyframes"
     else:
         phase = "video"
+    # overall episode completion 0-100 (keyframes ~45%, videos ~50%, assemble/music ~5%)
+    if out_mp4.exists():
+        pct = 100
+    elif total:
+        pct = round(min(99, (key_done / total) * 45 + (vid_done / total) * 50))
+        if phase == "assembling":
+            pct = max(pct, 96)
+    else:
+        pct = 0
     return {
         "slot": slot or "(pilot)",
         "name": name,
@@ -155,6 +164,7 @@ def _slot_status(work_dir):
         "vid_done": vid_done,
         "failed": failed,
         "frac": round(vid_done / total, 3) if total else 0.0,
+        "pct": pct,
         "phase": phase,
         "active": age is not None and age < ACTIVE_WINDOW and not out_mp4.exists(),
         "idle_secs": round(age) if age is not None else None,
