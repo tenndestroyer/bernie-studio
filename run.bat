@@ -2,13 +2,28 @@
 REM ============================================================================
 REM  Bernie Studio - ONE-CLICK.  Double-click this file (after downloading the
 REM  repo to your PC - you cannot run it from the GitHub website).
-REM  First run: installs EVERYTHING, then starts the autonomous series.
+REM  First run: installs EVERYTHING, then opens the app in your browser.
 REM ============================================================================
 setlocal enabledelayedexpansion
 title Bernie Studio
 cd /d "%~dp0"
 
 if "%BERNIE_HOME%"=="" ( set "HOMEDIR=%~dp0BernieStudioData" ) else ( set "HOMEDIR=%BERNIE_HOME%" )
+if not exist "%HOMEDIR%" mkdir "%HOMEDIR%" 2>nul
+
+REM --- Guard: if an install is already running (this window or another), DON'T start a 2nd one ---
+if exist "%HOMEDIR%\.installing" (
+  echo.
+  echo  An install is already running in another window.
+  echo  Please WAIT for it to finish ^(it says "SETUP COMPLETE" when done^),
+  echo  then double-click run.bat again.
+  echo.
+  echo  ^(If you are 100%% sure nothing is installing, delete this file and retry:^)
+  echo     "%HOMEDIR%\.installing"
+  echo.
+  pause
+  exit /b 0
+)
 
 if not exist "%HOMEDIR%\.installed" (
   echo.
@@ -31,8 +46,11 @@ if not exist "%HOMEDIR%\.installed" (
   )
   echo.
   echo  Installing engine, models and LLMs (~50 GB, one time). Grab a coffee...
+  echo  Leave this window OPEN until it says SETUP COMPLETE.
   echo.
+  >"%HOMEDIR%\.installing" echo running
   powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
+  del "%HOMEDIR%\.installing" 2>nul
   if errorlevel 1 ( echo. & echo  *** Setup hit a problem - see messages above. *** & echo. & pause & exit /b 1 )
 )
 
@@ -43,7 +61,9 @@ if not exist "%PYEXE%" (
   echo.
   echo  Bundled Python is missing - setup did not finish. Re-running setup...
   echo.
+  >"%HOMEDIR%\.installing" echo running
   powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
+  del "%HOMEDIR%\.installing" 2>nul
 )
 if not exist "%PYEXE%" (
   echo.
