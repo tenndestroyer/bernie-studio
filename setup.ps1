@@ -190,9 +190,17 @@ Say "pulling local LLMs (agents=$llm, vision=qwen2.5vl:7b)..."
 try { & ollama pull $llm 2>&1 | Select-Object -Last 1; & ollama pull qwen2.5vl:7b 2>&1 | Select-Object -Last 1 } catch { Say "ollama pull failed (is Ollama running?) - the app will retry later." }
 
 # ---------- 7. readiness summary ----------
-$flux = Test-Path (Join-Path $MD "unet\flux1-dev.safetensors")
-$wan  = Test-Path (Join-Path $MD "diffusion_models\wan2.2_ti2v_5B_fp16.safetensors")
-$ace  = Test-Path (Join-Path $MD "checkpoints\ace_step_v1_3.5b.safetensors")
+# Size-aware: a gated file fetched without a valid token saves as a ~136-byte error page;
+# existence alone would be a false "True". Delete any too-small file so a re-run re-downloads it.
+function ModelOK($p, $minMB) {
+  if (-not (Test-Path $p)) { return $false }
+  if (((Get-Item $p).Length / 1MB) -gt $minMB) { return $true }
+  Remove-Item $p -Force -ErrorAction SilentlyContinue
+  return $false
+}
+$flux = ModelOK (Join-Path $MD "unet\flux1-dev.safetensors") 1000
+$wan  = ModelOK (Join-Path $MD "diffusion_models\wan2.2_ti2v_5B_fp16.safetensors") 1000
+$ace  = ModelOK (Join-Path $MD "checkpoints\ace_step_v1_3.5b.safetensors") 500
 Say "-------------------- readiness --------------------"
 Say ("  embedded Python  : {0}" -f (PyMinor $PY))
 Say ("  PyTorch imports  : {0}" -f $torchok)
