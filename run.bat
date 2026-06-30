@@ -36,9 +36,23 @@ if not exist "%HOMEDIR%\.installed" (
   if errorlevel 1 ( echo. & echo  *** Setup hit a problem - see messages above. *** & echo. & pause & exit /b 1 )
 )
 
-REM use the bundled Python from setup (falls back to system python if missing)
+REM ALWAYS use the bundled, torch-compatible Python (NEVER the system one - that's
+REM what caused "python is too new / can't install torch" on Python 3.14 machines).
 set "PYEXE=%HOMEDIR%\python_embeded\python.exe"
-if not exist "%PYEXE%" set "PYEXE=python"
+if not exist "%PYEXE%" (
+  echo.
+  echo  Bundled Python is missing - setup did not finish. Re-running setup...
+  echo.
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
+)
+if not exist "%PYEXE%" (
+  echo.
+  echo  *** Could not create the bundled Python. See the messages above.       ***
+  echo  *** Usual fixes: install "Git for Windows", make sure you are online,   ***
+  echo  *** then double-click run.bat again. Nothing else needs installing.     ***
+  echo.
+  pause & exit /b 1
+)
 
 echo.
 echo ============================================================
