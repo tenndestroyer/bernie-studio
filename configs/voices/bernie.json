@@ -1,0 +1,11 @@
+{
+  "_comment": "Bernie voice pack: speaker -> [edge-tts voice name, rate, pitch]. Mirrors the real characters.CHARS voice tuples. Drop a copy named <pack>.json next to this and set BERNIE_VOICEPACK=<pack> to swap voices without touching any Python. Speakers with no voice (e.g. SEAGULL) are simply omitted; voices.py falls back to CHARS for anything missing here.",
+  "BERNIE": ["en-US-AnaNeural", "+10%", "+0Hz"],
+  "PIP": ["en-US-AnaNeural", "+22%", "+16Hz"],
+  "TUMBLE": ["en-US-EricNeural", "+2%", "-8Hz"],
+  "ROSIE": ["en-US-MichelleNeural", "-2%", "+12Hz"],
+  "SKY": ["en-US-JennyNeural", "+8%", "+4Hz"],
+  "REX": ["en-US-ChristopherNeural", "-8%", "-12Hz"],
+  "MAPLE": ["en-GB-RyanNeural", "-8%", "-10Hz"],
+  "NARR": ["en-US-GuyNeural", "+0%", "+0Hz"]
+}

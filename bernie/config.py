@@ -147,6 +147,12 @@ POST_UPSCALE = _envbool("BERNIE_POST_UPSCALE", False)   # optional extra detail 
 CONTINUITY   = _envbool("BERNIE_CONTINUITY", False)     # experimental: chain last frame -> next keyframe
 EVENTS_ON    = _envbool("BERNIE_EVENTS", True)          # write events.jsonl (the GUI live event stream)
 PRESETS_DIR  = pathlib.Path(os.environ.get("BERNIE_PRESETS", REPO / "configs"))
+BACKUP_DIR   = pathlib.Path(os.environ["BERNIE_BACKUP"]).resolve() if os.environ.get("BERNIE_BACKUP") else None  # copy finished episodes here
+LIPSYNC      = _envbool("BERNIE_LIPSYNC", False)        # opt-in post-render lip-sync (needs Wav2Lip/LatentSync)
+DRIFT_CHECK  = _envbool("BERNIE_DRIFT", False)          # experimental reference-image on-model drift check
+VOICEPACK    = os.environ.get("BERNIE_VOICEPACK", "bernie")   # configs/voices/<pack>.json
+TTS_WORKERS  = int(os.environ.get("BERNIE_TTS_WORKERS", "4") or 4)
+AUTO_LORA    = _envbool("BERNIE_AUTO_LORA", False)      # series: auto-train+activate a character LoRA after ep1
 
 # ---------- LLM (free chain; local Ollama guaranteed fallback) ----------
 def _load_keys_env():

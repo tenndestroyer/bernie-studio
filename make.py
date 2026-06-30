@@ -30,10 +30,19 @@ def main():
     ap.add_argument("--lora", default="", help="train a character LoRA, e.g. --lora bernie")
     ap.add_argument("--continuity", action="store_true",
                     help="experimental: reuse the establishing keyframe across same-location shots")
+    ap.add_argument("--backup", action="store_true",
+                    help="copy finished episodes to BERNIE_BACKUP and exit")
     a = ap.parse_args()
 
     if a.continuity:
         os.environ["BERNIE_CONTINUITY"] = "1"
+
+    # back up finished episodes and exit
+    if a.backup:
+        import backup
+        dests = backup.backup_all()
+        print(f"backed up {len(dests)} episode(s).")
+        return
 
     # launch the desktop app
     if a.gui:

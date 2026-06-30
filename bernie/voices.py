@@ -14,6 +14,10 @@ for _s in (sys.stdout, sys.stderr):
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from characters import CHARS
 import config
+try:
+    import presets
+except Exception:
+    presets = None
 
 # leading [EMOTION] markup -> (rate %delta, pitch Hz delta) on top of the character's base voice
 EMOTION = {
@@ -23,6 +27,40 @@ EMOTION = {
 }
 _TAG = re.compile(r"^\s*\[([A-Za-z]{3,10})\]\s*")
 
+# Keyword cues for the no-tag heuristic -> (rate %delta, pitch Hz delta). Magnitudes are kept to
+# ~half of the explicit-tag deltas so an inferred mood is a gentle nudge, never a caricature; an
+# explicit [TAG] always wins over anything inferred here.
+_CUE_WORDS = [
+    (("yay", "hooray", "woohoo", "wow", "yes!", "awesome", "amazing", "hurray"), (6, 6)),   # mild excited
+    (("shh", "shhh", "quietly", "whisper", "whispers", "softly", "hush"), (-6, -3)),         # gentle/whisper
+    (("sorry", "uh-oh", "uh oh", "oh no", "scared", "scary", "afraid", "worried", "yikes"), (4, 5)),  # mild nervous
+]
+_EXCITED = (6, 6)    # trailing '!'  -> mild excited
+_CURIOUS = (2, 3)    # trailing '?'  -> mild curious
+_GENTLE  = (-4, -2)  # '...'         -> gentle/trailing-off
+
+def _infer_emotion(line):
+    """Infer a SUBTLE (rate %, pitch Hz) delta for a line that has NO explicit [TAG].
+
+    Pure punctuation/keyword heuristic — not sentiment analysis. Word cues take priority over
+    bare punctuation; returns (0, 0) when nothing matches so the base voice is used unchanged.
+    """
+    s = (line or "").strip()
+    if not s:
+        return (0, 0)
+    low = s.lower()
+    for words, delta in _CUE_WORDS:
+        for w in words:
+            if w in low:
+                return delta
+    if s.endswith("..."):
+        return _GENTLE
+    if s.endswith("!"):
+        return _EXCITED
+    if s.endswith("?"):
+        return _CURIOUS
+    return (0, 0)
+
 def _delta(val, d, unit):
     try: n = int(str(val).replace(unit, "").replace("+", ""))
     except Exception: n = 0
@@ -30,8 +68,13 @@ def _delta(val, d, unit):
     return f"{'+' if n >= 0 else ''}{n}{unit}"
 
 def _apply_emotion(line, rate, pitch):
+    """Apply emotion to a line. An explicit leading [TAG] wins; otherwise infer a subtle mood from
+    punctuation/keywords. Either way the [TAG] is stripped from the spoken text."""
     m = _TAG.match(line or "")
     if not m:
+        dr, dp = _infer_emotion(line)
+        if dr or dp:
+            return line, _delta(rate, dr, "%"), _delta(pitch, dp, "Hz")
         return line, rate, pitch
     spoken = _TAG.sub("", line, count=1)
     dr, dp = EMOTION.get(m.group(1).upper(), (0, 0))
@@ -68,16 +111,39 @@ def _normalize(mp3, target_i=-16):
     except Exception:
         pass
 
+def _voice_map():
+    """Speaker -> (voice_name, rate, pitch), from the active voice pack merged over CHARS.
+
+    presets.voices() already returns the CHARS tuples as its fallback base with the JSON pack
+    (configs/voices/<VOICEPACK>.json) merged on top; if presets is unavailable we degrade to the
+    raw CHARS voices. Never raises."""
+    vm = {}
+    try:
+        if presets is not None:
+            for sp, v in (presets.voices() or {}).items():
+                if v:
+                    vm[sp] = tuple(v)
+    except Exception:
+        vm = {}
+    if not vm:  # last-ditch fallback if presets failed entirely
+        for sp, c in CHARS.items():
+            v = c.get("voice")
+            if v:
+                vm[sp] = tuple(v)
+    return vm
+
 def main():
     ep = json.loads((config.WORK / "episode.json").read_text(encoding="utf-8"))
+    vmap = _voice_map()
+    narr = vmap.get("NARR") or CHARS["NARR"]["voice"]
     jobs = []
     for shot in ep["shots"]:
         for i, d in enumerate(shot["dialogue"]):
             sp = d["speaker"]
-            cv = CHARS.get(sp, {}).get("voice")
+            cv = vmap.get(sp)
             if not cv:
-                print(f"  !! unknown speaker '{sp}' -> narrator voice (add it to characters.CHARS)")
-                cv = CHARS["NARR"]["voice"]
+                print(f"  !! unknown speaker '{sp}' -> narrator voice (add it to the voice pack / characters.CHARS)")
+                cv = narr
             vname, rate, pitch = cv
             spoken, rate, pitch = _apply_emotion(d["line"], rate, pitch)
             jobs.append(dict(shot=shot["id"], idx=i, speaker=sp, raw=d["line"], spoken=spoken,

@@ -80,6 +80,7 @@ def render_video(shot, key_name, salt=0):
     frames_to_mp4(frames, out_mp4)
     ok, why = qc.check_clip(out_mp4)
     if not ok:
+        _emit("qc", f"{sid} QC rejected: {why}", "warn", {"sid": sid, "why": why})
         raise RuntimeError(f"QC rejected clip: {why}")
     # optional post-pass: smoother motion (interp) / sharper detail (upscale) — off by default
     if interp is not None and interp.enabled():

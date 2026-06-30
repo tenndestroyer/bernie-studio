@@ -189,6 +189,20 @@ $llm = if ($tier -eq "ultra") { "qwen2.5:32b" } elseif ($tier -eq "high") { "qwe
 Say "pulling local LLMs (agents=$llm, vision=qwen2.5vl:7b)..."
 try { & ollama pull $llm 2>&1 | Select-Object -Last 1; & ollama pull qwen2.5vl:7b 2>&1 | Select-Object -Last 1 } catch { Say "ollama pull failed (is Ollama running?) - the app will retry later." }
 
+# ---------- 7. readiness summary ----------
+$flux = Test-Path (Join-Path $MD "unet\flux1-dev.safetensors")
+$wan  = Test-Path (Join-Path $MD "diffusion_models\wan2.2_ti2v_5B_fp16.safetensors")
+$ace  = Test-Path (Join-Path $MD "checkpoints\ace_step_v1_3.5b.safetensors")
+Say "-------------------- readiness --------------------"
+Say ("  embedded Python  : {0}" -f (PyMinor $PY))
+Say ("  PyTorch imports  : {0}" -f $torchok)
+Say ("  FLUX (keyframes) : {0}" -f $flux)
+Say ("  Wan  (video)     : {0}" -f $wan)
+Say ("  ACE-Step (music) : {0}" -f $ace)
+Say "---------------------------------------------------"
+if (-not $flux) { Say "NOTE: FLUX not downloaded - set a free HF_TOKEN (accept the FLUX.1-dev license) and re-run setup to enable image keyframes." }
+if (-not $wan)  { Say "NOTE: Wan video model missing - re-run setup (network hiccup?) before rendering." }
+
 # ---------- done ----------
 if ($torchok) {
   Set-Content $MK "tier=$tier vram=$vram ram=$ram python=$(PyMinor $PY) $(Get-Date -Format o)"

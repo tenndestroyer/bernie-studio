@@ -42,6 +42,56 @@ def ollama_up():
         urllib.request.urlopen("http://localhost:11434/api/tags", timeout=5); return True
     except Exception: return False
 
+# --- EXPERIMENTAL reference-DRIFT smart filter (config.DRIFT_CHECK, default False) -----------
+# Honest limit: this is a cheap perceptual signature (downscale to 32x32 grayscale, a
+# 'tiny-image hash'), NOT a CLIP/identity embedding. It catches gross visual drift (a shot
+# that looks nothing like the established look of its character) but it is fooled by lighting,
+# pose, framing, and palette shifts; the DRIFT_HI threshold below is a rough guess and NEEDS
+# real validation on actual episodes before it's trusted as more than a soft hint. It NEVER
+# raises and NEVER changes the existing score/onmodel/scary flags — drift is purely additive.
+_PIL_IMAGE = None
+def _pil_image():
+    """Lazily import PIL.Image once; return the module or None (never raises)."""
+    global _PIL_IMAGE
+    if _PIL_IMAGE is None:
+        try:
+            from PIL import Image as _Img
+            _PIL_IMAGE = _Img
+        except Exception:
+            _PIL_IMAGE = False  # sentinel: tried & unavailable
+    return _PIL_IMAGE or None
+
+DRIFT_SIZE = 32      # downscale edge for the perceptual signature
+DRIFT_HI = 0.35      # tuned-by-eye: drift above this is treated as an extra weak signal
+
+def _drift_signature(image_path):
+    """Cheap perceptual signature: 32x32 grayscale pixel list (0..255), or None.
+
+    Degrades gracefully — returns None if PIL is missing or the image can't be read."""
+    Image = _pil_image()
+    if Image is None:
+        return None
+    try:
+        with Image.open(image_path) as im:
+            im = im.convert("L").resize((DRIFT_SIZE, DRIFT_SIZE))
+            return list(im.getdata())
+    except Exception:
+        return None
+
+def _drift_distance(sig_a, sig_b):
+    """Normalized mean-abs-diff (0..1) between two equal-length signatures, or None."""
+    if not sig_a or not sig_b or len(sig_a) != len(sig_b):
+        return None
+    total = sum(abs(a - b) for a, b in zip(sig_a, sig_b))
+    return round(total / (len(sig_a) * 255.0), 4)
+
+def _drift_char_key(shot):
+    """Pick the reference 'character' bucket for a shot: its first known char, else global."""
+    for c in shot.get("chars", []) or []:
+        if c in CHAR_REF:
+            return c
+    return "__global__"
+
 def vlm(prompt, image_path, timeout=120):
     b64 = base64.b64encode(pathlib.Path(image_path).read_bytes()).decode()
     body = json.dumps({"model":VLM,"prompt":prompt,"images":[b64],"stream":False,
@@ -154,6 +204,10 @@ def review_keyframes(min_score=62):
         print(f"No episode.json to review ({e}); skipping visual review."); return [], {}
     if not ollama_up():
         print("Ollama vision model not reachable; skipping visual review."); return [], {}
+    # Optional drift filter (config.DRIFT_CHECK, default False). When off, this whole block is
+    # inert and the report is byte-for-byte identical to the pre-drift behavior.
+    drift_on = bool(getattr(config, "DRIFT_CHECK", False))
+    drift_refs = {}   # char key -> reference signature (lazily set to first ACCEPTED keyframe)
     results, weak, per_shot = {}, [], []
     for shot in ep.get("shots", []):
         sid = shot.get("id")
@@ -165,8 +219,28 @@ def review_keyframes(min_score=62):
         flag = "  <-- FLAG" if bad else ""
         print(f"  {sid}: score={r['score']} onmodel={r['onmodel']} scary={r['scary']} "
               f"{r['issue'][:50]}{flag}")
-        per_shot.append({"id":sid, "score":r["score"], "onmodel":r["onmodel"],
-                         "scary":r["scary"], "issue":r["issue"], "source":"key"})
+        row = {"id":sid, "score":r["score"], "onmodel":r["onmodel"],
+               "scary":r["scary"], "issue":r["issue"], "source":"key"}
+        # Reference-drift: compare this keyframe's signature to the established look for its
+        # character. Build the reference lazily from the FIRST accepted (non-bad) keyframe of
+        # that character so we drift against a known-good frame, not a flagged one.
+        if drift_on:
+            sig = _drift_signature(kf)
+            if sig is not None:
+                ckey = _drift_char_key(shot)
+                ref = drift_refs.get(ckey)
+                if ref is None:
+                    if not bad:
+                        drift_refs[ckey] = sig   # seed the reference; self-distance is 0
+                    row["drift"] = 0.0
+                else:
+                    d = _drift_distance(ref, sig)
+                    if d is not None:
+                        row["drift"] = d
+                        if d > DRIFT_HI:
+                            print(f"     {sid}: high drift {d:.3f} vs {ckey} reference")
+                            weak.append({"shot":sid, "reason":"drift", "drift":d, **r})
+        per_shot.append(row)
         if bad: weak.append({"shot":sid, **r})
     report = _write_report(results, weak, per_shot)
     print(f"\nvisual avg={report.get('avg_visual',0)}  flagged {len(weak)} shots for re-render")

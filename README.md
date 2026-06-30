@@ -89,11 +89,17 @@ Power-user CLI (the app wraps all of this, but it's there if you want it):
 python make.py --gui                 # launch the desktop app
 python make.py --doctor [--fix]      # self-test the install (and attempt safe repairs)
 python make.py --lora bernie         # curate a dataset + train/stage a character LoRA (long GPU job)
+python make.py --backup              # copy finished episodes to BERNIE_BACKUP
 python make.py --slot ep3 --name Bernie_Ep3 --generate "..." --scenes 14 [--continuity]
 ```
-Optional quality flags (off by default): `BERNIE_INTERP=1` (smoother motion via interpolation),
+Optional flags (all off by default): `BERNIE_INTERP=1` (smoother motion via interpolation),
 `BERNIE_POST_UPSCALE=1` (extra detail), `BERNIE_LORA=bernie_lora.safetensors` (lock a trained character),
-`BERNIE_CONTINUITY=1` (reuse an establishing keyframe across same-location shots).
+`BERNIE_CONTINUITY=1` (reuse an establishing keyframe across same-location shots),
+`BERNIE_BACKUP=E:\Backups` (auto-copy finished episodes there), `BERNIE_VOICEPACK=mypack`
+(use `configs/voices/mypack.json`), `BERNIE_LIPSYNC=1` (opt-in lip-sync post-pass — needs a
+Wav2Lip/LatentSync model installed), `BERNIE_DRIFT=1` (experimental reference on-model check),
+`BERNIE_AUTO_LORA=1` (series auto-trains + activates a character LoRA after episode 1, if a trainer
+is installed — the biggest hands-off consistency win).
 
 It's **dependency-free** (Python stdlib only — no Electron, no npm, no CDN; works offline) and binds to
 `127.0.0.1` only. The old CLI still works for power users (`python make.py …`), and the app's

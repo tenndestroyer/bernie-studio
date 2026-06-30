@@ -95,6 +95,16 @@ def main(script_target=88, script_iters=3, visual_min=62, revision_rounds=2):
     final = config.OUT / (getattr(config, "EPISODE_NAME", "Bernie_Ep1") + ".mp4")
     log(f"########## DONE: {final} exists={final.exists()} ##########")
 
+    # offsite/local backup of the finished episode (no-op unless BERNIE_BACKUP is set)
+    if final.exists():
+        try:
+            import backup
+            dest = backup.backup_episode()
+            if dest:
+                log(f"backed up -> {dest}")
+        except Exception as e:
+            log(f"(backup skipped: {e})")
+
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()

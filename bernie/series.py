@@ -71,6 +71,39 @@ def build(ep):
     ok = (config.OUT / f"{ep['name']}.mp4").exists()
     return ok, r.returncode
 
+def _maybe_auto_lora(ep):
+    """Opt-in (BERNIE_AUTO_LORA): once an episode has produced on-model keyframes, train a
+    Bernie character LoRA and ACTIVATE it (via BERNIE_LORA) for the rest of the season, so
+    later episodes are more consistent — fully hands-off. Safe + honest:
+      * default OFF (no behavior change unless BERNIE_AUTO_LORA=1);
+      * if a LoRA is already trained/active, just reuse it (no re-train);
+      * if no trainer is installed, it stages the kohya job and continues WITHOUT a LoRA
+        (never blocks the season on a trainer the user doesn't have);
+      * training, when it does run, is a long one-time GPU job — by design, and opt-in."""
+    if not getattr(config, "AUTO_LORA", False) or os.environ.get("BERNIE_LORA"):
+        return
+    lora_file = config.LORA_OUT / "bernie_lora.safetensors"
+    if lora_file.exists():
+        os.environ["BERNIE_LORA"] = lora_file.name
+        print(f"[series] activating existing LoRA {lora_file.name} for the rest of the season.", flush=True)
+        return
+    try:
+        import lora_dataset, lora_train
+        if lora_train.detect_trainer() is None:
+            print("[series] AUTO_LORA on but no trainer installed -> staging the kohya job and "
+                  "continuing without a LoRA (see LORA_OUT/README_LORA.txt).", flush=True)
+            lora_train.train(character="bernie")   # writes the ready-to-run job, returns None
+            return
+        print("[series] AUTO_LORA: building dataset + training the Bernie LoRA (one-time, LONG GPU job)...", flush=True)
+        lora_dataset.build(character="bernie", slot=ep["slug"])
+        path = lora_train.train(character="bernie")
+        if path and pathlib.Path(path).exists():
+            os.environ["BERNIE_LORA"] = pathlib.Path(path).name
+            print(f"[series] ✅ LoRA trained + activated: {path} — later episodes lock to a consistent Bernie.", flush=True)
+    except Exception as e:
+        print(f"[series] auto-LoRA skipped: {e}", flush=True)
+
+
 def run_series(max_episodes=None):
     print("########## BERNIE STUDIO — AUTONOMOUS SERIES MODE ##########", flush=True)
     print(config.summary(), flush=True)
@@ -87,6 +120,7 @@ def run_series(max_episodes=None):
         if ok and ep["slug"] not in st["done"]:
             st["done"].append(ep["slug"])
             print(f"✅ EPISODE {ep['n']} DONE: {config.OUT / (ep['name']+'.mp4')}", flush=True)
+            _maybe_auto_lora(ep)
         else:
             print(f"⚠️ episode {ep['n']} ({ep['slug']}) did not finish (rc={rc}); will retry on next pass.", flush=True)
             time.sleep(10)

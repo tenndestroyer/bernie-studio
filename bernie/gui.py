@@ -269,6 +269,17 @@ def action_reroll(body):
     pid = _launch([_python(), "-c", code], extra, f"reroll_{slot}_{sid}")
     return {"ok": True, "pid": pid, "shot": sid}
 
+def action_backup(_body):
+    """Copy finished episodes to BERNIE_BACKUP (config.BACKUP_DIR)."""
+    try:
+        import backup
+        if backup.target() is None:
+            return {"ok": False, "error": "no backup folder set — add BERNIE_BACKUP in Settings"}
+        dests = backup.backup_all()
+        return {"ok": True, "count": len(dests), "dests": [str(d) for d in dests]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 def _library():
     lib = []
     try:
@@ -409,6 +420,8 @@ def write_settings(body):
         cur["BERNIE_TIER"] = _clean(body["BERNIE_TIER"])
     if body.get("BERNIE_HOME"):
         cur["BERNIE_HOME"] = _clean(body["BERNIE_HOME"])
+    if body.get("BERNIE_BACKUP"):
+        cur["BERNIE_BACKUP"] = _clean(body["BERNIE_BACKUP"])
     lines = [f"{k}={v}" for k, v in cur.items()]
     keys_f.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return {"ok": True, "saved": list(cur.keys())}
@@ -558,6 +571,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, write_settings(body))
             if u.path == "/api/reroll":
                 return self._send(200, action_reroll(body))
+            if u.path == "/api/backup":
+                return self._send(200, action_backup(body))
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(500, {"error": str(e)})

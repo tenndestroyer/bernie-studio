@@ -281,7 +281,8 @@
 
     <!-- LIBRARY -->
     <section class="section" id="tab-library">
-      <div class="card"><h3>🎞️ Episode Library</h3>
+      <div class="card"><h3>🎞️ Episode Library
+        <span class="tag"><button class="btn small ghost" onclick="backupEpisodes()">⤓ Back up all</button></span></h3>
         <table><thead><tr><th>Episode</th><th>Size</th><th>Finished</th><th></th></tr></thead>
           <tbody id="libbody"><tr><td colspan="4" class="muted">No finished episodes yet.</td></tr></tbody></table>
       </div>
@@ -314,6 +315,8 @@
         </select>
         <label>Storage / models folder (BERNIE_HOME)</label>
         <input type="text" id="s-home" placeholder="e.g. D:\BernieData (put the ~50GB of models on another drive)">
+        <label>Backup folder for finished episodes (BERNIE_BACKUP — optional)</label>
+        <input type="text" id="s-backup" placeholder="e.g. E:\BernieBackups or a synced cloud folder">
         <div class="row" style="margin-top:18px"><button class="btn" onclick="saveSettings()">💾 Save settings</button></div>
         <p class="muted" style="margin-top:10px;font-size:12px">Keys are written to <code>keys.env</code> (gitignored — never uploaded). Tier/home changes apply to the next render.</p>
       </div>
@@ -486,8 +489,11 @@ async function loadSettings(){const s=await api('/api/settings');
   $('s-gq').placeholder=s.keys.GROQ_API_KEY?('current: '+s.keys.GROQ_API_KEY):'gsk_… (none set)';
   $('s-tier').value=''; }
 async function saveSettings(){const body={HF_TOKEN:$('s-hf').value,CEREBRAS_API_KEY:$('s-cb').value,
-  GROQ_API_KEY:$('s-gq').value,BERNIE_TIER:$('s-tier').value,BERNIE_HOME:$('s-home').value};
+  GROQ_API_KEY:$('s-gq').value,BERNIE_TIER:$('s-tier').value,BERNIE_HOME:$('s-home').value,
+  BERNIE_BACKUP:$('s-backup').value};
   const r=await api('/api/settings','POST',body);toast(r.ok?'💾 Saved.':'Failed.');}
+async function backupEpisodes(){const r=await api('/api/backup','POST',{});
+  toast(r.ok?('⤓ Backed up '+(r.count||0)+' episode(s)'):'Backup: '+(r.error||'failed'));}
 let CURLOG='comfy_server';
 async function refreshLogList(){const s=await api('/api/status');const sel=$('logsel');
   const cur=sel.value||CURLOG;sel.innerHTML=(s.logs||[]).map(n=>`<option ${n===cur?'selected':''}>${n}</option>`).join('');

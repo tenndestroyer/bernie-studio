@@ -157,6 +157,54 @@ def characters(path=None):
     return data
 
 
+def _fallback_voices():
+    """Speaker -> [voice_name, rate, pitch] straight from characters.CHARS — always available."""
+    try:
+        import characters as ch
+    except Exception:
+        return {}
+    out = {}
+    for sp, c in getattr(ch, "CHARS", {}).items():
+        try:
+            v = c.get("voice")
+            if v:
+                out[sp] = list(v)
+        except Exception:
+            pass
+    return out
+
+
+def voices(pack=None):
+    """Return a voice pack: {speaker: [voice_name, rate, pitch]}.
+
+    Loads configs/voices/<pack or config.VOICEPACK>.json from the active presets dir. The CHARS
+    voice tuples are always used as the fallback base, and any speakers defined in the JSON pack
+    are merged on top — so a partial pack only overrides the speakers it names and everything else
+    keeps its built-in voice. If the file is missing or unparseable, you get the pure CHARS
+    fallback. Never raises.
+
+    Honest limit: this only swaps the edge-tts voice/rate/pitch per speaker. It does not change the
+    TTS engine or add real lip-sync — the result is still synthetic narration over a cute AI cartoon.
+    """
+    base = _fallback_voices()
+    try:
+        if pack is None:
+            pack = getattr(config, "VOICEPACK", "bernie") if config is not None else "bernie"
+        pack = str(pack or "bernie")
+        fpath = _presets_dir() / "voices" / pack
+        data = _load_file(fpath)
+        if isinstance(data, dict):
+            for sp, v in data.items():
+                # skip metadata/comment keys and anything that isn't a [name, rate, pitch]-ish list
+                if isinstance(sp, str) and sp.startswith("_"):
+                    continue
+                if isinstance(v, (list, tuple)) and len(v) == 3:   # [voice, rate, pitch]
+                    base[sp] = list(v)
+    except Exception:
+        pass
+    return base
+
+
 def season(path=None):
     """Return the season plan as a list of episode dicts (n, slug, name, scenes, title, premise).
 
