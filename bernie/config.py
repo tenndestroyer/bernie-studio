@@ -117,9 +117,9 @@ _TIERS = {
     "high":     dict(WAN_W=1280, WAN_H=720, WAN_FRAMES=81,  WAN_STEPS=30, WAN_DTYPE="fp8_e4m3fn",
                      WAN_MODEL="wan2.2_ti2v_5B", TILED=True,  KEY_W=1280, KEY_H=720,
                      LLM_LOCAL="qwen2.5:14b"),
-    "balanced": dict(WAN_W=960,  WAN_H=544, WAN_FRAMES=81,  WAN_STEPS=28, WAN_DTYPE="fp8_e4m3fn",
+    "balanced": dict(WAN_W=832,  WAN_H=480, WAN_FRAMES=81,  WAN_STEPS=28, WAN_DTYPE="fp8_e4m3fn",
                      WAN_MODEL="wan2.2_ti2v_5B", TILED=True,  KEY_W=1280, KEY_H=720,
-                     LLM_LOCAL="qwen2.5vl:7b"),
+                     LLM_LOCAL="qwen2.5vl:7b"),  # 832x480 keeps 12GB headroom on busy shots
     "low":      dict(WAN_W=640,  WAN_H=368, WAN_FRAMES=81,  WAN_STEPS=24, WAN_DTYPE="fp8_e4m3fn",
                      WAN_MODEL="wan2.2_ti2v_5B", TILED=True,  KEY_W=1024, KEY_H=576,
                      LLM_LOCAL="qwen2.5vl:7b"),
