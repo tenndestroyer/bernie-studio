@@ -1,5 +1,5 @@
 """Minimal ComfyUI HTTP API client: start server, queue a workflow graph, wait, collect outputs."""
-import json, time, urllib.request, urllib.error, subprocess, pathlib, uuid, sys
+import json, time, urllib.request, urllib.error, subprocess, pathlib, uuid, sys, os
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import config
 
@@ -27,10 +27,13 @@ def start_server(timeout=600):
         print("  comfy already up"); return None
     main = config.ENGINE / "main.py"
     log = open(config.LOGDIR / "comfy_server.log", "w")
-    proc = subprocess.Popen(
-        [str(config.PY_EMBED), str(main), "--listen", "127.0.0.1", "--port", "8188",
-         "--output-directory", str(config.COMFY_OUTPUT)],
-        cwd=str(config.ENGINE), stdout=log, stderr=subprocess.STDOUT)
+    # backend args: --directml (AMD/Intel), --cpu (no GPU), nothing (NVIDIA/CUDA)
+    cmd = [str(config.PY_EMBED), str(main), "--listen", "127.0.0.1", "--port", "8188",
+           "--output-directory", str(config.COMFY_OUTPUT)] + list(getattr(config, "COMFY_ARGS", []))
+    # CREATE_NO_WINDOW | DETACHED_PROCESS so ComfyUI isn't killed by a console-close signal
+    flags = (0x08000000 | 0x00000008) if os.name == "nt" else 0
+    proc = subprocess.Popen(cmd, cwd=str(config.ENGINE), stdout=log, stderr=subprocess.STDOUT,
+                            creationflags=flags)
     t0 = time.time()
     while time.time() - t0 < timeout:
         if server_up():

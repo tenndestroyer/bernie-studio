@@ -15,15 +15,30 @@ $MK     = Join-Path $HOMEDIR ".installed"
 New-Item -ItemType Directory -Force -Path $HOMEDIR | Out-Null
 function Say($m){ Write-Host "[bernie-setup] $m" -ForegroundColor Cyan }
 
-# ---------- 0. hardware detection ----------
-$vram = 0
-try { $vram = [int]((nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits) -split "`n")[0] / 1024 } catch {}
+# ---------- 0. hardware detection (vendor + VRAM) ----------
+$vram = 0; $vendor = "cpu"
+try { $vram = [int]((nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits) -split "`n")[0] / 1024; if ($vram -gt 0) { $vendor = "nvidia" } } catch {}
+if ($vendor -ne "nvidia") {
+  try {
+    $gname = (Get-CimInstance Win32_VideoController | Where-Object { $_.AdapterRAM -ne $null } | Sort-Object AdapterRAM -Descending | Select-Object -First 1).Name
+    if ($gname -match "Radeon|AMD") { $vendor = "amd" }
+    elseif ($gname -match "Arc|Intel") { $vendor = "intel" }
+    elseif ($gname -match "NVIDIA|GeForce|RTX|Quadro") { $vendor = "nvidia" }
+    # try registry for true VRAM (AdapterRAM caps at 4GB)
+    $m = 0; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $v=(Get-ItemProperty $_.PSPath -Name 'HardwareInformation.qwMemorySize' -ErrorAction SilentlyContinue).'HardwareInformation.qwMemorySize'; if($v -gt $m){$m=$v} }
+    if ($m -gt 0) { $vram = [math]::Round($m/1GB,0) }
+  } catch {}
+}
+if ($env:BERNIE_GPU) { $vendor = $env:BERNIE_GPU }
 $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)
 $tier = if ($env:BERNIE_TIER) { $env:BERNIE_TIER }
         elseif ($vram -ge 22) { "ultra" } elseif ($vram -ge 15) { "high" }
         elseif ($vram -ge 11) { "balanced" } else { "low" }
-Say "Detected GPU VRAM=${vram}GB, RAM=${ram}GB  ->  quality tier: $tier"
-if ($vram -lt 8) { Say "WARNING: <8GB VRAM detected. Rendering will be very slow." }
+Say "Detected GPU: $vendor, VRAM=${vram}GB, RAM=${ram}GB  ->  quality tier: $tier"
+if ($vendor -eq "nvidia") { Say "NVIDIA/CUDA backend (fully supported)." }
+elseif ($vendor -eq "amd" -or $vendor -eq "intel") { Say "$vendor GPU -> DirectML backend (EXPERIMENTAL/best-effort; needs more VRAM, no fp8)." }
+else { Say "WARNING: no supported GPU detected -> CPU mode (extremely slow; for testing only)." }
+if ($vram -lt 8 -and $vendor -ne "cpu") { Say "WARNING: <8GB VRAM. Rendering will be very slow / may not fit." }
 
 # ---------- 0b. prerequisites (git, ffmpeg) via winget ----------
 function Need($exe, $wingetId) {
@@ -80,10 +95,18 @@ if (-not (Test-Path (Join-Path $ENG ".git"))) {
   }
 }
 
-# ---------- 3. PyTorch cu128 (Blackwell/40xx/50xx) + ComfyUI requirements ----------
-Say "installing PyTorch cu128 (Blackwell-ready, ~2.7GB) + requirements..."
+# ---------- 3. PyTorch (vendor-specific) + ComfyUI requirements ----------
 & $PY -m pip install --upgrade pip 2>&1 | Out-Null
-& $PY -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | Select-Object -Last 1
+if ($vendor -eq "nvidia") {
+  Say "installing PyTorch cu128 (NVIDIA, Blackwell-ready, ~2.7GB)..."
+  & $PY -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | Select-Object -Last 1
+} elseif ($vendor -eq "amd" -or $vendor -eq "intel") {
+  Say "installing PyTorch + torch-directml ($vendor, DirectML backend)..."
+  & $PY -m pip install --force-reinstall torch-directml 2>&1 | Select-Object -Last 2
+} else {
+  Say "installing PyTorch (CPU build)..."
+  & $PY -m pip install --force-reinstall torch torchvision torchaudio 2>&1 | Select-Object -Last 1
+}
 & $PY -m pip install -r (Join-Path $ENG "requirements.txt") 2>&1 | Select-Object -Last 1
 & $PY -m pip install --upgrade "huggingface_hub" edge-tts pillow numpy 2>&1 | Out-Null
 & $PY -c "import torch;print('[bernie-setup] torch',torch.__version__,'CUDA',torch.cuda.is_available())"

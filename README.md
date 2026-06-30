@@ -28,8 +28,15 @@ friends), but the whole system is reusable for any preschool-style show. Everyth
 
 ## 🖥️ Requirements
 
-- **Windows 10/11 + an NVIDIA GPU** (works from 8 GB VRAM; better with more)
-- ~70 GB free disk, [Ollama](https://ollama.com), `git`, and `ffmpeg` on PATH
+- **Windows 10/11** with a GPU. It **auto-detects your GPU vendor** and configures itself:
+  - 🟢 **NVIDIA (CUDA)** — fully supported & verified. Works from 8 GB VRAM; better with more. **Recommended.**
+  - 🟡 **AMD / Intel Arc (DirectML)** — supported **best-effort / experimental**. The installer sets up
+    `torch-directml` and launches with `--directml` automatically. Honest caveats: it's **slower**, can't
+    use fp8 (so it needs **more VRAM** — fp16 weights), and the heavy **Wan video** model may be slow or
+    not fully supported on DirectML. Image generation (Flux) generally works. For better AMD performance,
+    the community [ComfyUI-Zluda](https://github.com/patientx/ComfyUI-Zluda) (CUDA-on-AMD) is an alternative.
+  - ⚪ **No GPU** → CPU mode (extremely slow; testing only).
+- ~70 GB free disk. `git`, `ffmpeg`, and `Ollama` are **auto-installed** if missing (via winget).
 - *(Optional, free)* a [HuggingFace token](https://huggingface.co/settings/tokens) + accepting the
   [FLUX.1-dev license](https://huggingface.co/black-forest-labs/FLUX.1-dev) to fetch that model
 - *(Optional, free)* Cerebras/Groq API keys for faster cloud LLM (local Ollama works with none)

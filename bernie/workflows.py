@@ -20,7 +20,7 @@ def flux_keyframe(positive, negative, seed, prefix, lora=None, lora_strength=0.8
                   steps=24, guidance=3.5, w=None, h=None):
     w = w or config.KEY_W; h = h or config.KEY_H
     g = {
-        "10": {"class_type":"UNETLoader","inputs":{"unet_name":FLUX_UNET,"weight_dtype":"fp8_e4m3fn"}},
+        "10": {"class_type":"UNETLoader","inputs":{"unet_name":FLUX_UNET,"weight_dtype":config.FLUX_DTYPE}},
         "11": {"class_type":"DualCLIPLoader","inputs":{"clip_name1":FLUX_T5,"clip_name2":FLUX_CLIPL,"type":"flux"}},
         "12": {"class_type":"VAELoader","inputs":{"vae_name":FLUX_VAE}},
         "13": {"class_type":"CLIPTextEncode","inputs":{"text":positive,"clip":["11",0]}},
