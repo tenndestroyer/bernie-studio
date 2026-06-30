@@ -14,6 +14,12 @@ the prioritized roadmap below.
 > - 🔊 **Audio quick wins** — real **sidechain music ducking** under dialogue (`music.py`), per-line
 >   **voice loudness-normalization** + **parallel TTS** + **[emotion] markup** + unknown-speaker warnings
 >   (`voices.py`), best-of-3 for the underscore bed (`music_gen.py`).
+> - 🎬 **Short/long-term levers shipped (all off-by-default, backward-compatible):** **autonomous LoRA**
+>   (`series.py`, `BERNIE_AUTO_LORA` — auto-trains + activates a character LoRA after ep 1 if a trainer is
+>   installed), **voice packs** (`configs/voices/*.json`), **output backup** (`backup.py`/`BERNIE_BACKUP`),
+>   **smarter long-beat fill** (hold-frame / slow-down / seamless ping-pong — reduces the "looping" tell,
+>   `assemble.py`), opt-in **lip-sync** scaffold (`lipsync.py`/`BERNIE_LIPSYNC`), experimental **reference
+>   drift** check (`BERNIE_DRIFT`), and **QC verdicts** in the live event feed. Everything verified (33 tests).
 
 ---
 
