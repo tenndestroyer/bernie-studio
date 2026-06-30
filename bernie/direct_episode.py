@@ -72,10 +72,19 @@ def main(script_target=88, script_iters=3, visual_min=62, revision_rounds=2):
         for rnd in range(1, revision_rounds+1):
             log(f"--- visual review round {rnd} ---")
             weak, report = director_visual.review_keyframes(min_score=visual_min)
-            log(f"visual avg={report.get('avg_visual')}, flagged {len(weak)}")
-            if not weak:
-                log("no weak shots; visual quality bar met"); break
             ids = [w["shot"] for w in weak]
+            # also review the MIDDLE frame of each rendered clip (catches motion-frame defects a
+            # static keyframe can't show). Safe no-op if there are no clips / no ffmpeg / Ollama is down.
+            try:
+                clip_weak, _ = director_visual.review_clips(min_score=visual_min)
+                for w in clip_weak:
+                    if w["shot"] not in ids:
+                        ids.append(w["shot"])
+            except Exception as e:
+                log(f"(mid-clip review skipped: {e})")
+            log(f"visual avg={report.get('avg_visual')}, flagged {len(ids)} (keyframe+clip)")
+            if not ids:
+                log("no weak shots; visual quality bar met"); break
             log(f"re-rendering: {ids}")
             director_revise.revise(ids, use_directed_prompts=True)
     stage("visual-review+revision", _visual_loop)

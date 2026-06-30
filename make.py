@@ -24,7 +24,41 @@ def main():
     ap.add_argument("--series", action="store_true",
                     help="FULLY AUTONOMOUS: auto-pick and build the next episode, forever")
     ap.add_argument("--max", type=int, default=None, help="(with --series) stop after N episodes")
+    ap.add_argument("--gui", action="store_true", help="launch the desktop app (GUI) instead of the CLI")
+    ap.add_argument("--doctor", action="store_true", help="run an install self-test")
+    ap.add_argument("--fix", action="store_true", help="(with --doctor) attempt safe repairs")
+    ap.add_argument("--lora", default="", help="train a character LoRA, e.g. --lora bernie")
+    ap.add_argument("--continuity", action="store_true",
+                    help="experimental: reuse the establishing keyframe across same-location shots")
     a = ap.parse_args()
+
+    if a.continuity:
+        os.environ["BERNIE_CONTINUITY"] = "1"
+
+    # launch the desktop app
+    if a.gui:
+        import gui
+        gui.serve()
+        return
+
+    # install self-test / repair
+    if a.doctor:
+        import doctor
+        rep = doctor.run(fix=a.fix)
+        for c in rep.get("checks", []):
+            print(("  OK   " if c.get("ok") else "  FAIL ") + c.get("name", "") +
+                  ("  — " + str(c["detail"]) if c.get("detail") else ""))
+        print("\nDOCTOR:", "all good ✓" if rep.get("ok") else "problems found (see above)")
+        sys.exit(0 if rep.get("ok") else 1)
+
+    # train a character LoRA (curate dataset -> train). Honest: the training run is a long GPU job.
+    if a.lora:
+        if a.slot: os.environ["BERNIE_SLOT"] = a.slot
+        import importlib, config; importlib.reload(config)
+        import lora_dataset, lora_train
+        lora_dataset.build(character=a.lora, slot=a.slot)
+        lora_train.train(character=a.lora)
+        return
 
     # autonomous series mode: keep making the next episode until the season is done
     if a.series:

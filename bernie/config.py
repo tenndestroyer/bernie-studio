@@ -135,6 +135,19 @@ if not IS_NVIDIA:
 SHOT_SECONDS = WAN_FRAMES / FPS
 UPSCALE = True
 
+# ---------- post-processing, consistency & observability (roadmap NEXT/LATER) ----------
+def _envbool(k, default=False):
+    v = os.environ.get(k)
+    return default if v is None else v.strip().lower() in ("1", "true", "yes", "on")
+
+LORA_BERNIE  = os.environ.get("BERNIE_LORA", "")        # LoRA .safetensors in LORA_OUT ("" = off)
+POST_INTERP  = _envbool("BERNIE_INTERP", False)         # ffmpeg minterpolate -> smoother motion (2x fps)
+POST_FPS     = FPS * 2 if POST_INTERP else FPS
+POST_UPSCALE = _envbool("BERNIE_POST_UPSCALE", False)   # optional extra detail upscale post-pass
+CONTINUITY   = _envbool("BERNIE_CONTINUITY", False)     # experimental: chain last frame -> next keyframe
+EVENTS_ON    = _envbool("BERNIE_EVENTS", True)          # write events.jsonl (the GUI live event stream)
+PRESETS_DIR  = pathlib.Path(os.environ.get("BERNIE_PRESETS", REPO / "configs"))
+
 # ---------- LLM (free chain; local Ollama guaranteed fallback) ----------
 def _load_keys_env():
     f = REPO / "keys.env"

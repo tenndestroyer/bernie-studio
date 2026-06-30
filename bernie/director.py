@@ -57,6 +57,14 @@ PASSES = [
                 ["youtube_suitability","production_quality","overall_entertainment"]),
 ]
 
+# Shared strict-rubric anchor appended to EVERY review pass in ONE place so scores SPREAD
+# instead of clustering at 85-92. Defined once; injected by review_pass.
+RUBRIC = ("\n\nSTRICT 0-100 RUBRIC (anchor your numbers, do not bunch at 85-92): "
+    "60 = serviceable but flawed (name a real flaw); 75 = good with minor issues; "
+    "90 = excellent and specific. Reserve 90+ for genuinely outstanding work. Use the full "
+    "range; most first-draft work lands 60-80. If unsure, score LOWER and cite the specific "
+    "weakness — never award a high score without concrete justification.")
+
 SHOW = ("'Bernie & the Dino Valley Pals' — a premium preschool (ages 2-6) animated series. "
         "Bernie is a brave, big-hearted Bernese Mountain Dog puppy; Pip is his tiny excitable "
         "ladybug pal. They discover a hidden valley of FRIENDLY dinosaurs. Warm, funny, gentle, "
@@ -161,7 +169,7 @@ def script_text(ep):
 
 def review_pass(script, name, focus, dims):
     sys_p = ("You are an uncompromising, world-class animation director and children's-TV "
-             "showrunner reviewing a script for "+SHOW)
+             "showrunner reviewing a script for "+SHOW+RUBRIC)
     user_p = (f"REVIEW LENS: {name} — focus on: {focus}.\n\nSCRIPT:\n{script}\n\n"
         f"Score ONLY these dimensions 0-100 (be a tough but fair professional; great kids' TV "
         f"scores 80-90, masterpiece 90+): {dims}.\n"
@@ -191,9 +199,27 @@ def review(ep):
               "avg_score":round(sum(crit)/len(crit),1) if crit else 0}
     return report
 
+def _dedup_notes(notes):
+    """De-duplicate notes by (shot_id, department/dimension) BEFORE the ~24 cap is applied, so one
+    loud department can't crowd out every other under the cap. Preserves original order/priority:
+    the FIRST note seen for a given (shot, department) wins. 'department' is whichever label the
+    caller attached — 'pass' (director lenses), 'agent' (writers' room), or 'dim' — falling back to
+    the issue text so genuinely distinct notes on the same shot are kept."""
+    seen, out = set(), []
+    for n in notes:
+        shot = str(n.get("shot", "")).strip().lower()
+        dept = (n.get("pass") or n.get("agent") or n.get("dim")
+                or n.get("department") or n.get("issue") or "")
+        key = (shot, str(dept).strip().lower()[:60])
+        if key in seen:
+            continue
+        seen.add(key); out.append(n)
+    return out
+
 def improve(ep, report):
     script = script_text(ep)
-    weak = report["notes"][:24]   # cap to keep request small (avoid 413 on free tiers)
+    all_notes = _dedup_notes(report["notes"])   # de-dup by (shot, department) before the cap
+    weak = all_notes[:24]   # cap to keep request small (avoid 413 on free tiers)
     notes_txt = "\n".join(f'- [{n.get("shot","")}] {str(n.get("fix") or n.get("issue",""))[:160]}'
                           for n in weak)
     sys_p = ("You are an Oscar-winning animation director and head writer doing a polish pass on "
@@ -213,18 +239,48 @@ def improve(ep, report):
     out = extract_json(llm(sys_p, user_p, max_tokens=4000, temperature=0.8))
     changed = {s["id"]: s for s in out.get("shots",[])}
     n_applied = 0
+    diffs = []   # before/after audit trail: {shot_id, field, before, after}
     for shot in ep["shots"]:
         c = changed.get(shot["id"])
         if not c: continue
+        sid = shot["id"]
         if "dialogue" in c and c["dialogue"]:
+            before = "  ".join(f'{d.get("speaker","")}: {d.get("line","")}'
+                               for d in shot.get("dialogue", []))
             shot["dialogue"] = [{"speaker":d["speaker"],"line":d["line"]} for d in c["dialogue"]]
-        if c.get("action"): shot["action"] = c["action"]
-        if c.get("motion"): shot["motion"] = c["motion"]
+            after = "  ".join(f'{d["speaker"]}: {d["line"]}' for d in shot["dialogue"])
+            if before != after:
+                diffs.append({"shot_id":sid, "field":"dialogue", "before":before, "after":after})
+        if c.get("action"):
+            before = shot.get("action","")
+            if before != c["action"]:
+                diffs.append({"shot_id":sid, "field":"action", "before":before, "after":c["action"]})
+            shot["action"] = c["action"]
+        if c.get("motion"):
+            before = shot.get("motion","")
+            if before != c["motion"]:
+                diffs.append({"shot_id":sid, "field":"motion", "before":before, "after":c["motion"]})
+            shot["motion"] = c["motion"]
         # rebuild the render prompt with style+characters locked + new action — but only if the
         # shot actually has an action (don't degrade a positive on an action-less legacy episode)
         if shot.get("action") and shot.get("location") is not None and shot.get("chars") is not None:
             shot["positive"] = build_positive(shot["location"], shot["chars"], shot["action"])
         n_applied += 1
+    # Persist a human-auditable before/after diff. Never raise on a missing/locked dir — degrade.
+    try:
+        rpt_path = config.WORK / "director_report.json"
+        prev = {}
+        if rpt_path.exists():
+            try: prev = json.loads(rpt_path.read_text(encoding="utf-8"))
+            except Exception: prev = {}
+        # accumulate across improve() calls/cycles so nothing is lost when a caller rewrites the
+        # report later with its own top-level fields.
+        prev.setdefault("changed", []).extend(diffs)
+        prev["changed_last"] = diffs
+        prev["summary_last"] = out.get("summary","")
+        rpt_path.write_text(json.dumps(prev, indent=2), encoding="utf-8")
+    except Exception:
+        pass
     return ep, out.get("summary",""), n_applied
 
 def direct(ep, target=90, max_iters=3):
@@ -252,7 +308,16 @@ def main(target=90, max_iters=3, apply=False):
     report = {"history":history, "final_scores":final["scores"],
               "final_min":final["min_score"], "final_avg":final["avg_score"],
               "notes":final["notes"]}
-    (config.WORK / "director_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    # preserve the before/after audit trail improve() accumulated during the loop (don't clobber it)
+    rpt_path = config.WORK / "director_report.json"
+    try:
+        if rpt_path.exists():
+            prev = json.loads(rpt_path.read_text(encoding="utf-8"))
+            for k in ("changed", "changed_last", "summary_last"):
+                if k in prev: report[k] = prev[k]
+    except Exception:
+        pass
+    rpt_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     if apply:
         src.write_text(json.dumps(ep, indent=2), encoding="utf-8")
         print(f"\nAPPLIED to episode.json")

@@ -1,0 +1,19 @@
+[project]
+name = "bernie-studio"
+version = "0.1.0"
+description = "Autonomous, fully-local AI pipeline that writes, directs, voices, scores, and renders animated kids' episodes."
+requires-python = ">=3.10"
+# Runtime is intentionally STDLIB-ONLY in the hot path. Heavy/optional deps
+# (PIL, numpy, ffmpeg, torch/ComfyUI) are detected at runtime and degrade
+# gracefully, so they are deliberately NOT listed here as hard requirements.
+dependencies = []
+
+[project.optional-dependencies]
+# Only needed to run the test suite. The pipeline itself needs none of these.
+test = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Quiet the noise; tests assert on behavior, not warnings.
+filterwarnings = ["ignore::DeprecationWarning"]

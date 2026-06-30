@@ -1,0 +1,1 @@
+# Bernie Studio pipeline package

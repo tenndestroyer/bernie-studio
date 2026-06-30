@@ -19,3 +19,5 @@ __pycache__/
 logs/
 *.log
 _*.py
+# ...but never ignore package __init__.py files (they start with "_")
+!**/__init__.py

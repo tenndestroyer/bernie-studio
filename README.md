@@ -76,8 +76,24 @@ No command line required. `run.bat` (or `Bernie Studio.bat` after install) launc
 - **Story Builder** — pick a spotlight character, setting, theme and life-lesson; it assembles an
   original premise for you.
 - **Characters** — the canonical Valley Pals cast (continuity reference).
-- **Library / Logs / Settings / Install** — browse finished episodes, tail live logs, save API keys
-  (to gitignored `keys.env`), and run/repair the installer — all from the UI.
+- **Writers' Room** — the 22-agent room's per-dimension scores and the actual *before/after* dialogue
+  changes it applied (scores are now calibrated, so high marks are earned).
+- **Visual QC** — the local vision model's verdict on every keyframe/clip (score, on-model, a hard safety
+  flag), with a **per-shot "Re-roll"** button.
+- **Live Activity** — the pipeline narrates itself in real time (an `events.jsonl` stream).
+- **Library / Logs / Settings / Install (+ Doctor)** — browse finished episodes, tail live logs, save API
+  keys (to gitignored `keys.env`), and run the installer or a one-click **health check** — all from the UI.
+
+Power-user CLI (the app wraps all of this, but it's there if you want it):
+```bat
+python make.py --gui                 # launch the desktop app
+python make.py --doctor [--fix]      # self-test the install (and attempt safe repairs)
+python make.py --lora bernie         # curate a dataset + train/stage a character LoRA (long GPU job)
+python make.py --slot ep3 --name Bernie_Ep3 --generate "..." --scenes 14 [--continuity]
+```
+Optional quality flags (off by default): `BERNIE_INTERP=1` (smoother motion via interpolation),
+`BERNIE_POST_UPSCALE=1` (extra detail), `BERNIE_LORA=bernie_lora.safetensors` (lock a trained character),
+`BERNIE_CONTINUITY=1` (reuse an establishing keyframe across same-location shots).
 
 It's **dependency-free** (Python stdlib only — no Electron, no npm, no CDN; works offline) and binds to
 `127.0.0.1` only. The old CLI still works for power users (`python make.py …`), and the app's

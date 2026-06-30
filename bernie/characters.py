@@ -4,7 +4,7 @@ Matches the design briefs in Bernie_Show/04_Character_and_Voice_Briefs.md."""
 
 # One global look, repeated verbatim on every shot so the model stays on-style.
 STYLE = (
-    "modern 3D animated preschool cartoon, Pixar/Moonbug style, soft global illumination, "
+    "modern 3D animated preschool cartoon, Moonbug/modern-studio style, soft global illumination, "
     "rounded shapes, clean simple shading, big expressive eyes, warm storybook color palette, "
     "shallow depth of field, cinematic lighting, high detail, 16:9, no text, no watermark"
 )

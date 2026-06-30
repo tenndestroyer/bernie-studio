@@ -4,7 +4,30 @@ import json, sys, pathlib, shutil, time, subprocess, zlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import config, comfy, workflows, qc
 
-LORA = None  # set to "bernie_lora.safetensors" once trained (see lora_train.py)
+# optional helpers (never block the render if absent)
+try:
+    from core import events
+except Exception:
+    events = None
+try:
+    import interp
+except Exception:
+    interp = None
+
+def _emit(stage, msg, level="info", data=None):
+    try:
+        if events:
+            events.emit(stage, msg, level, data)
+    except Exception:
+        pass
+
+# Character LoRA: activated by BERNIE_LORA / config.LORA_BERNIE once trained (see lora_train.py).
+LORA = config.LORA_BERNIE or None
+if LORA and not (config.LORA_OUT / LORA).exists():
+    print(f"[pipeline] LoRA '{LORA}' not found in {config.LORA_OUT}; rendering without it.")
+    LORA = None
+elif LORA:
+    print(f"[pipeline] character LoRA active: {LORA}")
 
 def seed_for(sid, salt=0):
     return (zlib.crc32(sid.encode()) + salt*7919) % (2**31)
@@ -37,7 +60,7 @@ def render_keyframe(shot, salt=0):
     return f"{sid}_key.png"
 
 # Push Wan toward a CUTE STYLIZED 3D look (dimensional, not flat 2D, not realistic).
-WAN_3D_BOOST = ("3D rendered CGI animation, cute stylized Pixar character design, big expressive eyes, "
+WAN_3D_BOOST = ("3D rendered CGI animation, cute stylized cartoon character design, big expressive eyes, "
     "rounded adorable proportions, soft volumetric lighting, dimensional rounded forms, soft global "
     "illumination, gentle depth of field, smooth cinematic motion, preschool cartoon, stable consistent "
     "character")
@@ -58,6 +81,14 @@ def render_video(shot, key_name, salt=0):
     ok, why = qc.check_clip(out_mp4)
     if not ok:
         raise RuntimeError(f"QC rejected clip: {why}")
+    # optional post-pass: smoother motion (interp) / sharper detail (upscale) — off by default
+    if interp is not None and interp.enabled():
+        try:
+            tmp = out_mp4.with_suffix(".post.mp4")
+            if interp.process(out_mp4, tmp) and tmp.exists() and tmp.stat().st_size > 1000:
+                tmp.replace(out_mp4)
+        except Exception as e:
+            print(f"[pipeline] interp post-pass skipped for {sid}: {e}")
     return len(frames)
 
 def load_progress():
@@ -78,26 +109,47 @@ def main(retries=2):
 
     # ---- Pass A: keyframes ----
     print("=== PASS A: keyframes (Flux) ===")
+    _emit("render", f"Pass A: keyframes (0/{total})", data={"pass": "A", "total": total})
+    prev_loc = prev_key = None
     for i, shot in enumerate(ep["shots"], 1):
         sid = shot["id"]
         st = prog["shots"].setdefault(sid, {})
-        if (config.SHOTS / f"{sid}_key.png").exists() and st.get("key") == "done":
+        keyfile = config.SHOTS / f"{sid}_key.png"
+        loc = shot.get("location") or shot.get("setting")
+        if keyfile.exists() and st.get("key") == "done":
+            prev_loc, prev_key = loc, keyfile
             print(f"[A {i}/{total}] {sid} keyframe exists, skip"); continue
+        # continuity (experimental, opt-in): consecutive same-location shots share an establishing keyframe
+        if config.CONTINUITY and prev_key and prev_key.exists() and loc and loc == prev_loc:
+            try:
+                shutil.copy(prev_key, keyfile)
+                (config.ENGINE / "input").mkdir(parents=True, exist_ok=True)
+                shutil.copy(prev_key, config.ENGINE / "input" / f"{sid}_key.png")
+                st.update(key="done", key_secs=0, continuity=True); save_progress(prog)
+                _emit("keyframe", f"{sid} reused prior keyframe (continuity)", data={"sid": sid, "i": i})
+                print(f"[A {i}/{total}] {sid} keyframe reused (continuity)")
+                prev_loc, prev_key = loc, keyfile; continue
+            except Exception:
+                pass
         for attempt in range(retries+1):
             try:
                 t0 = time.time()
                 render_keyframe(shot, salt=attempt)
                 st["key"] = "done"; st["key_secs"] = round(time.time()-t0,1); save_progress(prog)
+                _emit("keyframe", f"{sid} keyframe OK ({i}/{total})", data={"sid": sid, "i": i, "secs": st["key_secs"]})
                 print(f"[A {i}/{total}] {sid} keyframe OK ({st['key_secs']:.0f}s)")
+                prev_loc, prev_key = loc, keyfile
                 break
             except Exception as e:
                 print(f"[A {i}/{total}] {sid} keyframe FAIL {attempt+1}: {e}")
                 st["key"] = f"retry{attempt+1}"; save_progress(prog); time.sleep(2)
         else:
             st["key"] = "failed"; save_progress(prog)
+            _emit("keyframe", f"{sid} keyframe FAILED", "warn", {"sid": sid, "i": i})
 
     # ---- Pass B: videos ----
     print("=== PASS B: videos (Wan) ===")
+    _emit("render", f"Pass B: videos (0/{total})", data={"pass": "B", "total": total})
     for i, shot in enumerate(ep["shots"], 1):
         sid = shot["id"]
         st = prog["shots"].setdefault(sid, {})
@@ -117,6 +169,7 @@ def main(retries=2):
                 nf = render_video(shot, key_name, salt=attempt)
                 dt = time.time()-t0
                 st.update(status="done", frames=nf, secs=round(dt,1), t=time.time()); save_progress(prog)
+                _emit("video", f"{sid} video OK ({i}/{total})", data={"sid": sid, "i": i, "frames": nf, "secs": round(dt, 1)})
                 print(f"[B {i}/{total}] {sid} video OK ({nf} frames, {dt:.0f}s)")
                 break
             except Exception as e:
@@ -124,8 +177,10 @@ def main(retries=2):
                 st["status"] = f"retry{attempt+1}"; st["err"]=str(e)[:160]; save_progress(prog); time.sleep(2)
         else:
             st["status"] = "failed"; save_progress(prog)
+            _emit("video", f"{sid} video FAILED", "warn", {"sid": sid, "i": i})
 
     done = sum(1 for s in prog["shots"].values() if s.get("status")=="done")
+    _emit("render", f"Render complete: {done}/{total} shots done.", data={"done": done, "total": total})
     print(f"\nRender complete: {done}/{total} shots done.")
 
 if __name__ == "__main__":

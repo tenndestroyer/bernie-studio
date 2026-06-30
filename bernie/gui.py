@@ -120,17 +120,11 @@ def _slot_status(work_dir):
     shots = ep.get("shots", [])
     total = len(shots)
     prog_f = work_dir / "progress.json"
-    prog = {}
-    if prog_f.exists():
-        try:
-            prog = json.loads(prog_f.read_text(encoding="utf-8"))
-        except Exception:
-            prog = {}
-    pshots = prog.get("shots", {})
-    key_done   = sum(1 for s in pshots.values() if s.get("key") == "done")
-    vid_done   = sum(1 for s in pshots.values() if s.get("status") == "done")
-    failed     = sum(1 for s in pshots.values() if str(s.get("status", "")).startswith("fail")
-                     or str(s.get("key", "")).startswith("fail"))
+    # typed state wrapper (core/state.py) instead of a raw dict read
+    from core.state import RenderProgress
+    slot_name = work_dir.name[5:] if work_dir.name.startswith("work_") else ""
+    _c = RenderProgress.load(slot_name).counts()
+    key_done, vid_done, failed = _c["key_done"], _c["vid_done"], _c["failed"]
     # newest activity across progress + rendered shot files
     shots_dir = work_dir / "shots"
     newest = _newest_mtime(prog_f)
@@ -179,11 +173,17 @@ def _all_slots():
         pass
     return out
 
+def _safe_slot(slot):
+    """Reject path-traversal in a slot label; '' means the default (pilot) work dir."""
+    s = (slot or "").strip()
+    if s == "(pilot)" or ".." in s or "/" in s or "\\" in s or ":" in s:
+        return ""
+    return s
+
 def _work_for_slot(slot):
-    """Map a slot label back to its work directory."""
-    if not slot or slot == "(pilot)":
-        return config.STORAGE / "work"
-    return config.STORAGE / f"work_{slot}"
+    """Map a slot label back to its work directory (traversal-safe)."""
+    s = _safe_slot(slot)
+    return config.STORAGE / "work" if not s else config.STORAGE / f"work_{s}"
 
 def shots_detail(slot):
     """Per-shot grid for the Render Monitor: status + which assets exist."""
@@ -221,6 +221,54 @@ def thumb_path(slot, sid):
     f = _work_for_slot(slot) / "shots" / f"{safe}_key.png"
     return f if f.exists() else None
 
+def _read_work_json(slot, name):
+    f = _work_for_slot(slot) / name
+    if f.exists():
+        try:
+            return json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+def read_report(slot):
+    """Writers'-room reports (calibrated director writes director_report.json with before/after diffs)."""
+    return {"director": _read_work_json(slot, "director_report.json"),
+            "agency": _read_work_json(slot, "agency_report.json")}
+
+def read_visual(slot):
+    """Visual-QC report (per-shot score/onmodel/scary/issue) written by director_visual."""
+    return _read_work_json(slot, "visual_report.json") or {}
+
+def read_events_api(slot, since):
+    try:
+        from core import events
+        return {"events": events.read_events(slot, since=int(since or 0))}
+    except Exception as e:
+        return {"events": [], "error": str(e)}
+
+def run_doctor():
+    try:
+        import doctor
+        return doctor.run(fix=False)
+    except Exception as e:
+        return {"ok": False, "checks": [], "error": str(e)}
+
+def action_reroll(body):
+    """Re-render one weak shot on the GPU (detached). Resumable; updates progress.json."""
+    slot = (body.get("slot") or "").strip()
+    sid = "".join(c for c in (body.get("id") or "") if c.isalnum() or c in "_-")
+    if not sid:
+        return {"ok": False, "error": "no shot id"}
+    code = (f"import sys,pathlib;sys.path.insert(0,r'{HERE}');"
+            f"import director_revise as d;d.revise(['{sid}'])")
+    extra = {}
+    if slot and slot != "(pilot)":
+        extra["BERNIE_SLOT"] = slot
+    if body.get("name"):
+        extra["BERNIE_EP"] = body["name"]
+    pid = _launch([_python(), "-c", code], extra, f"reroll_{slot}_{sid}")
+    return {"ok": True, "pid": pid, "shot": sid}
+
 def _library():
     lib = []
     try:
@@ -235,8 +283,8 @@ def _library():
 def _season():
     try:
         import series
-        st = series._state()
-        done = set(st.get("done", []))
+        from core.state import SeriesState
+        done = set(SeriesState.load().done)
         plan = []
         for ep in series.SEASON:
             final = (config.OUT / f"{ep['name']}.mp4").exists()
@@ -351,14 +399,16 @@ def write_settings(body):
         for line in keys_f.read_text(encoding="utf-8").splitlines():
             if "=" in line and not line.strip().startswith("#"):
                 k, v = line.split("=", 1); cur[k.strip()] = v.strip()
+    def _clean(v):   # one value per line: no CR/LF can forge another key=value pair
+        return str(v).replace("\r", "").replace("\n", "").strip()
     for k in ("HF_TOKEN", "CEREBRAS_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY"):
         v = body.get(k)
-        if v is not None and str(v).strip() and not str(v).startswith("****"):
-            cur[k] = str(v).strip()
+        if v is not None and _clean(v) and not str(v).startswith("****"):
+            cur[k] = _clean(v)
     if body.get("BERNIE_TIER"):
-        cur["BERNIE_TIER"] = str(body["BERNIE_TIER"]).strip()
+        cur["BERNIE_TIER"] = _clean(body["BERNIE_TIER"])
     if body.get("BERNIE_HOME"):
-        cur["BERNIE_HOME"] = str(body["BERNIE_HOME"]).strip()
+        cur["BERNIE_HOME"] = _clean(body["BERNIE_HOME"])
     lines = [f"{k}={v}" for k, v in cur.items()]
     keys_f.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return {"ok": True, "saved": list(cur.keys())}
@@ -476,6 +526,14 @@ class Handler(BaseHTTPRequestHandler):
                 if f:
                     return self._send(200, f.read_bytes(), "image/png")
                 return self._send(404, {"error": "no thumbnail"})
+            if u.path == "/api/events":
+                return self._send(200, read_events_api(q.get("slot", [""])[0], q.get("since", ["0"])[0]))
+            if u.path == "/api/report":
+                return self._send(200, read_report(q.get("slot", [""])[0]))
+            if u.path == "/api/visual":
+                return self._send(200, read_visual(q.get("slot", [""])[0]))
+            if u.path == "/api/doctor":
+                return self._send(200, run_doctor())
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(500, {"error": str(e)})
@@ -498,6 +556,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, action_stop(body))
             if u.path == "/api/settings":
                 return self._send(200, write_settings(body))
+            if u.path == "/api/reroll":
+                return self._send(200, action_reroll(body))
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(500, {"error": str(e)})

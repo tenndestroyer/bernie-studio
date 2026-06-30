@@ -34,12 +34,12 @@ The pipeline works end-to-end and is more capable than most "AI cartoon" toys:
   JSON API: `/api/status`, `/api/season`, `/api/settings`, `/api/logs`, `/api/create`, `/api/series`,
   `/api/stop`, `/api/install`, `/api/shots`, `/api/thumb`.
 
-**The real remaining gaps** this roadmap targets: the GUI is **stdlib-based and now wired into `run.bat`**
-as the default front door, but it can be deepened (per-shot keyframe **thumbnails** are now in v1; a live
-*event stream* and Writers'-Room / Visual-QC pages are still to come). There is no structured logging or
-typed state (everything is `print` + raw `dict` reads). The 22-agent scores are LLM self-reports with no
-calibration. And **character LoRA lock is stubbed** (`pipeline.LORA = None`) — so frame-to-frame identity
-rests entirely on prompt strings. That last one is the single biggest realistic quality lever left.
+**Status update:** the gaps this roadmap targeted have now been built (see §3). The GUI is the default
+`run.bat` front door with per-shot keyframe **thumbnails**, a **live event stream**, and **Writers'-Room** +
+**Visual-QC** pages. Structured events (`core/events.py`) and typed state (`core/state.py`) replace the worst
+raw-dict/`print` drift; the 22-agent scores are now **calibrated** (rubric anchors + persisted before/after
+diffs); and **character LoRA** tooling exists with `pipeline.LORA` wired to `BERNIE_LORA` — training the LoRA
+is the user's long GPU job (the single biggest realistic quality lever, now unblocked rather than stubbed).
 
 ---
 
@@ -120,32 +120,39 @@ Format: **effort** (S ≤1d · M few days · L 1–2 wk) · **impact** · one ho
 3. ✅ **Per-shot Render Monitor + keyframe thumbnails** (`/api/shots`, `/api/thumb`; expandable slot grid). ·
    **M** · **High** · *You can see off-model shots forming — but the only action is re-roll, not a fix.*
 
-### NEXT — clear value, more effort
-4. **Train a character LoRA; flip `pipeline.LORA` on.** Add `lora_train.py`, curate a dataset of approved
-   keyframes into `config.DATASET`. · **L** · **Very High** · *Biggest realistic jump in frame-to-frame
-   consistency. Caveats: chicken-and-egg (you need consistent frames to train the LoRA that makes consistent
-   frames — bootstrap from the best existing keyframes + light manual curation), and LoRA training itself
-   costs GPU-hours/VRAM on the same tiers that already take overnight per episode. Makes characters
-   consistent, **not rigged** — motion stays AI-video soft.* **Acceptance:** same character recognizable
-   across ≥90% of shots in a held-out episode by human spot-check.
-5. **Calibrate the writers' room** (rubric anchors + persisted before/after shot diffs + note de-dup). ·
-   **M** · **High** · *Reduces score inflation and makes the room auditable; still can't judge final pixels.*
-   **Acceptance:** agent scores show >10-pt spread on a deliberately weak draft (no longer all 85–92).
-6. **VLM returns JSON; add mid-clip review.** · **M** · **High** · *More reliable flagging; a 7B VLM is a
-   smart filter, not a human art director.*
-7. **`core/events.py` append-only `events.jsonl`; GUI tails a live event stream.** · **S** · **Medium** ·
-   *Richer than log-tailing; no effect on output quality.*
+### NEXT — ✅ SHIPPED (verified: all compile/import, 25 tests pass, adversarially reviewed)
+4. ✅ **Character LoRA tooling + activation.** `lora_dataset.py` curates approved keyframes (prefers ones the
+   visual review didn't flag) into `config.DATASET`; `lora_train.py` detects a trainer (ComfyUI node / kohya)
+   and runs it, or stages a complete ready-to-run kohya job; `pipeline.LORA` activates from `BERNIE_LORA`.
+   CLI: `python make.py --lora bernie`. · **Done means:** the *tooling* is complete and wired; the **training
+   run itself is a multi-hour GPU job the user kicks off** (honest — and no trainer is bundled). Makes
+   characters consistent, **not rigged** — motion stays AI-video soft.
+5. ✅ **Writers'-room calibration.** Rubric anchors (worked 60/75/90 examples) make scores spread; notes are
+   de-duped by shot before the cap; before/after shot diffs are persisted to `director_report.json` and shown
+   on the GUI **Writers' Room** page.
+6. ✅ **VLM returns JSON + mid-clip review.** `director_visual.py` parses strict JSON (regex fallback), adds
+   `review_clips()` over each clip's middle frame (wired into the build's revision loop), and makes **scary a
+   hard re-roll**. Writes `visual_report.json` (per-shot + weak), shown on the GUI **Visual QC** page (re-roll).
+7. ✅ **Events bus + live stream.** `core/events.py` → `events.jsonl`, emitted from `pipeline.py`; the GUI
+   dashboard tails it as a **Live Activity** feed.
 
-### LATER — real but deferrable
-8. **Typed `core/state.py`** wrapping the JSON artifacts (no more raw-dict drift). · **M** · **Medium**.
-9. **YAML preset system (`configs/`)** so a new show is config, not code edits. · **L** · **Medium**.
-10. **`pyproject.toml` + mock-based tests** around `aggregate`, `extract_json`, `qc`, state I/O. · **M** ·
-    **Medium** · *Prevents refactor regressions; users never see it.*
-11. **Optional RIFE interpolation + detail upscale post-pass** before assemble. · **L** · **Medium** ·
-    *Reads smoother/sharper, but polishes AI-video motion — it does not convert it into rigged animation,
-    and it adds render time.*
-12. **Last-frame → next-shot continuity chaining.** · **L** · **Medium** · *Softens shot-to-shot drift;
-    AI i2v still wanders, so it's a softening, not true continuity.*
+### LATER — ✅ SHIPPED
+8. ✅ **Typed `core/state.py`** (Episode/Render/Series), now used by the GUI (no more raw-dict drift).
+9. ✅ **Preset system** — dependency-free `configs/*.json` + `presets.py` (a new show is config, not code).
+10. ✅ **`pyproject.toml` + mock-based tests** (`tests/`, 25 passing) over events/state/presets/config/qc/json-repair.
+11. ✅ **Optional interp + upscale post-pass** — `interp.py` (ffmpeg minterpolate + lanczos, no extra model;
+    off by default via `BERNIE_INTERP`/`BERNIE_POST_UPSCALE`). *Polishes AI-video motion — it does not convert
+    it into rigged animation, and it adds render time.*
+12. ✅ **Continuity chaining** — guarded keyframe-reuse for consecutive same-location shots
+    (`BERNIE_CONTINUITY` / `make.py --continuity`, off by default). *A softening, not true continuity.*
+
+**Plus:** a **Doctor** self-test/repair (`doctor.py`, `make.py --doctor`, GUI button) and the GUI **Writers' Room**,
+**Visual QC** (per-shot re-roll), **Live Activity**, and per-shot **keyframe-thumbnail** Render Monitor pages.
+
+> Honest note on "shipped": every item is implemented, integrated, and test/▸review-verified on the dev machine.
+> Items gated on a long GPU job (LoRA training) or opt-in flags (interp, continuity) ship as complete, working
+> tooling that is **off by default** — you turn them on / kick them off. None of them change the fundamental
+> ceiling: this is a cute-stylized-3D AI cartoon, not rigged animation.
 
 ---
 

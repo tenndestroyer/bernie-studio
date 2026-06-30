@@ -129,6 +129,8 @@
     <div class="navbtn" data-tab="create"><span class="ico">🎬</span> Create Episode</div>
     <div class="navbtn" data-tab="story"><span class="ico">📖</span> Story Builder</div>
     <div class="navbtn" data-tab="cast"><span class="ico">🐾</span> Characters</div>
+    <div class="navbtn" data-tab="room"><span class="ico">📝</span> Writers' Room</div>
+    <div class="navbtn" data-tab="visual"><span class="ico">🔍</span> Visual QC</div>
     <div class="navbtn" data-tab="library"><span class="ico">🎞️</span> Library</div>
     <div class="navbtn" data-tab="logs"><span class="ico">📜</span> Logs</div>
     <div class="navbtn" data-tab="settings"><span class="ico">⚙️</span> Settings</div>
@@ -179,6 +181,33 @@
       <div class="card">
         <h3>🎬 Render Queue <span class="tag"><button class="btn small danger" onclick="stopAll()">Stop all</button></span></h3>
         <div id="slots"><div class="muted">No renders yet. Create an episode to begin.</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>📡 Live Activity <span class="tag" id="ev-slot"></span></h3>
+        <div id="events" class="logbox" style="height:200px">No activity yet — start an episode to see the pipeline narrate itself.</div>
+      </div>
+    </section>
+
+    <!-- WRITERS' ROOM -->
+    <section class="section" id="tab-room">
+      <div class="card"><h3>📝 Writers' Room report
+        <span class="tag"><select id="room-slot" onchange="loadRoom()" style="width:auto"></select></span></h3>
+        <p class="muted">The 22-agent room's per-dimension scores and the actual before/after dialogue changes it
+          applied (calibrated so scores spread — high marks are earned, not automatic).</p>
+        <div id="room-body" class="muted">Select an episode slot above.</div>
+      </div>
+    </section>
+
+    <!-- VISUAL QC -->
+    <section class="section" id="tab-visual">
+      <div class="card"><h3>🔍 Visual QC
+        <span class="tag"><select id="vis-slot" onchange="loadVisual()" style="width:auto"></select></span></h3>
+        <p class="muted">The local vision model's verdict on every keyframe (and mid-clip frame): score, on-model,
+          and a hard safety flag. Re-roll any weak shot with a fresh seed + the director's improved prompt.</p>
+        <div class="warnbox">Honest: re-rolling is a seed lottery guided by a better prompt — it improves the odds of a
+          good frame, it does not paint a fix.</div>
+        <div id="vis-body" class="muted" style="margin-top:12px">Select an episode slot above.</div>
       </div>
     </section>
 
@@ -297,11 +326,13 @@
         <p class="muted">First-run setup downloads the engine (ComfyUI), the right PyTorch for your GPU
           (CUDA for NVIDIA, DirectML for AMD/Intel, CPU fallback), all models (Flux, Wan 2.2, ACE-Step,
           upscaler) and the local Ollama LLMs — about 50 GB. It auto-detects your hardware.</p>
-        <div class="row" style="gap:12px;margin:14px 0">
+        <div class="row" style="gap:12px;margin:14px 0;flex-wrap:wrap">
           <button class="btn" id="installbtn" onclick="runInstall()">⬇ Install / Repair everything</button>
+          <button class="btn ghost" onclick="runDoctor()">🩺 Run health check</button>
           <button class="btn ghost" onclick="loadLog('gui_install')">View install log</button>
         </div>
-        <div class="logbox" id="installlog" style="height:42vh">No install run yet.</div>
+        <div id="doctorout" style="margin-bottom:14px"></div>
+        <div class="logbox" id="installlog" style="height:36vh">No install run yet.</div>
       </div>
     </section>
   </main>
@@ -339,8 +370,10 @@ function nav(tab){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   $('tab-'+tab).classList.add('active');
   $('page-title').textContent={dashboard:'Dashboard',create:'Create Episode',story:'Story Builder',
-    cast:'Characters',library:'Library',logs:'Logs',settings:'Settings',install:'Install'}[tab];
+    cast:'Characters',room:"Writers' Room",visual:'Visual QC',library:'Library',logs:'Logs',
+    settings:'Settings',install:'Install'}[tab];
   if(tab==='settings')loadSettings(); if(tab==='logs')refreshLogList(); if(tab==='library')refreshLibrary();
+  if(tab==='room')loadRoom(); if(tab==='visual')loadVisual();
 }
 document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>nav(b.dataset.tab));
 
@@ -402,6 +435,7 @@ async function refresh(){
       <div class="thumbs" id="thumbs-${cid}"></div></div>`;
   }).join('');
   OPEN.forEach(loadShots);   // re-populate any expanded grids after the poll re-renders
+  fillSlotSelects(slots); loadEvents();
 }
 
 // ---------------- actions ----------------
@@ -467,6 +501,77 @@ async function refreshLibrary(){const s=await api('/api/status');const lib=s.lib
     return `<tr><td><b>${e.name}</b></td><td>${e.size_mb} MB</td><td class="muted">${d.toLocaleString()}</td>
       <td><span class="muted" style="font-size:12px">${e.file}</span></td></tr>`;}).join('')
     :'<tr><td colspan="4" class="muted">No finished episodes yet.</td></tr>';}
+
+// ---------------- writers' room / visual qc / events / doctor ----------------
+let EVSLOT='';
+function fillSlotSelects(slots){
+  const opts=slots.map(s=>`<option value="${s.slot}">${s.title} (${s.slot})</option>`).join('');
+  ['room-slot','vis-slot'].forEach(id=>{const el=$(id);if(!el)return;const cur=el.value;
+    el.innerHTML=opts||'<option value="">(no episodes yet)</option>';
+    if(cur&&slots.some(s=>s.slot===cur))el.value=cur;});
+  const act=slots.find(s=>s.active)||slots[0];
+  EVSLOT=act?act.slot:''; if($('ev-slot'))$('ev-slot').textContent=EVSLOT?('· '+(act.title||EVSLOT)):'';
+}
+async function loadEvents(){
+  if(!EVSLOT)return;
+  let d; try{d=await api('/api/events?slot='+encodeURIComponent(EVSLOT)+'&since=0');}catch(e){return;}
+  const evs=d.events||[]; const ic=l=>l==='warn'?'⚠':l==='error'?'⛔':'·'; const box=$('events');
+  box.textContent=evs.length?evs.slice(-200).map(e=>`${ic(e.level)} [${e.stage}] ${e.msg}`).join('\n')
+    :'No activity yet — start an episode to see the pipeline narrate itself.';
+  box.scrollTop=box.scrollHeight;
+}
+async function loadRoom(){
+  const slot=$('room-slot').value; const host=$('room-body');
+  if(!slot){host.innerHTML='<span class="muted">No episodes yet.</span>';return;}
+  let d; try{d=await api('/api/report?slot='+encodeURIComponent(slot));}catch(e){return;}
+  const dir=d.director||{}, ag=d.agency||{}; let html='';
+  const scores=dir.final_scores||ag.final_scores||dir.scores||ag.scores;
+  if(scores&&typeof scores==='object'){
+    html+='<h4 style="margin:6px 0">Dimension scores</h4><div class="grid cards">';
+    Object.entries(scores).forEach(([k,v])=>{const val=typeof v==='object'?(v.score||v.avg||0):v;
+      html+=`<div><div class="row between"><span class="muted">${k}</span><b>${val}</b></div>
+        <div class="bar"><i style="width:${Math.min(100,+val||0)}%"></i></div></div>`;});
+    html+='</div>';
+  }
+  const changed=dir.changed||ag.changed||[];
+  if(changed.length){
+    html+='<h4 style="margin:16px 0 8px">Applied changes ('+changed.length+')</h4>';
+    html+=changed.slice(0,40).map(c=>`<div class="slot"><b>${c.shot_id||c.shot||c.id||''}</b>
+      <span class="muted">${c.field||''}</span>
+      <div class="sub"><span style="color:var(--bad)">− ${(c.before||'').toString().slice(0,180).replace(/</g,'&lt;')}</span></div>
+      <div class="sub"><span style="color:var(--good)">+ ${(c.after||'').toString().slice(0,180).replace(/</g,'&lt;')}</span></div></div>`).join('');
+  }
+  if(!html)html=`<div class="muted">No writers'-room report for this slot yet — it appears after the
+    script-direction stage. Raw report:</div><div class="logbox" style="height:300px">${JSON.stringify(d,null,2).replace(/</g,'&lt;')}</div>`;
+  host.innerHTML=html;
+}
+async function loadVisual(){
+  const slot=$('vis-slot').value; const host=$('vis-body');
+  if(!slot){host.innerHTML='<span class="muted">No episodes yet.</span>';return;}
+  let d; try{d=await api('/api/visual?slot='+encodeURIComponent(slot));}catch(e){return;}
+  let shots=d.shots||d.results||[];
+  if(!shots.length&&d.weak)shots=d.weak.map(w=>({id:w.shot||w.id,score:w.score,issue:w.issue,onmodel:w.onmodel,scary:w.scary}));
+  if(!shots.length){host.innerHTML='<span class="muted">No visual report yet — it appears after the visual-review stage.</span>';return;}
+  host.innerHTML='<div class="castgrid">'+shots.slice(0,200).map(s=>{
+    const sc=s.score!=null?s.score:'—';
+    const flag=s.scary?'<span class="badge" style="color:var(--bad);border-color:var(--bad)">scary</span>':
+      (s.onmodel===false?'<span class="badge" style="color:var(--warn)">off-model</span>':'<span class="badge on">ok</span>');
+    return `<div class="cast"><div class="thumb" style="aspect-ratio:16/9;margin-bottom:8px">
+      <img loading="lazy" src="/api/thumb?slot=${encodeURIComponent(slot)}&id=${s.id}" onerror="this.style.display='none'"></div>
+      <div class="row between"><b>${s.id}</b><span>score ${sc}</span></div>
+      <div class="row" style="margin:6px 0">${flag}</div>
+      <div class="muted" style="font-size:12px;min-height:30px">${(s.issue||'').toString().slice(0,90)}</div>
+      <button class="btn small" style="margin-top:6px" onclick="reroll('${slot}','${s.id}',this)">↻ Re-roll</button></div>`;
+  }).join('')+'</div>';
+}
+async function reroll(slot,id,btn){if(btn){btn.disabled=true;btn.textContent='re-rolling…';}
+  const r=await api('/api/reroll','POST',{slot,id});
+  toast(r.ok?('↻ Re-rolling '+id+' — watch the Dashboard'):'Failed: '+(r.error||''));}
+async function runDoctor(){const out=$('doctorout');out.innerHTML='<span class="muted">Running health check…</span>';
+  let d;try{d=await api('/api/doctor');}catch(e){out.innerHTML='<span class="muted">failed</span>';return;}
+  const rows=(d.checks||[]).map(c=>`<tr><td>${c.ok?'✅':'❌'} ${c.name}</td><td class="muted">${(c.detail||'').toString().slice(0,90)}</td></tr>`).join('');
+  out.innerHTML=`<div class="${d.ok?'note':'warnbox'}">${d.ok?'All systems go ✓':'Some checks need attention'}</div>
+    <table style="margin-top:8px"><tbody>${rows}</tbody></table>`;}
 
 // ---------------- boot ----------------
 chipset('sb-char',CHARS.map(c=>c[0]),'char');chipset('sb-place',PLACES,'place');

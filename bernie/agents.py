@@ -15,6 +15,15 @@ DIMENSIONS = ["story_quality","character_development","dialogue","humor","emotio
   "child_engagement","retention","educational_value","continuity","qa_clean","rewatchability",
   "franchise_potential","youtube_suitability","production_quality","safety","overall"]
 
+# Shared strict-rubric anchor appended to EVERY reviewer prompt in ONE place so scores SPREAD
+# instead of all clustering at 85-92. Defined once; injected by run_agent (do not duplicate 20x).
+RUBRIC = ("\n\nSTRICT 0-100 RUBRIC (anchor your numbers to these, do not bunch at 85-92):\n"
+    "  60 = serviceable but flawed — you MUST name a real, specific flaw.\n"
+    "  75 = good, with minor issues you can point to.\n"
+    "  90 = excellent and specific. Reserve 90+ for genuinely outstanding work.\n"
+    "Use the full range; most first-draft work lands 60-80. If unsure, score LOWER and cite the "
+    "specific weakness. Do not award a high score without concrete justification.")
+
 # id, name, kind, dims it scores, verbatim system prompt
 AGENTS = [
  dict(id="exec_producer", name="Executive Producer", kind="review",
@@ -190,7 +199,7 @@ ORCHESTRATOR = AGENTS_BY_ID["master"]
 
 def run_agent(agent, script, context=""):
     """Reviewer/creative agent -> {scores, notes, verdict}."""
-    sys_p = agent["system"]
+    sys_p = agent["system"] + RUBRIC   # shared strict-rubric anchor (defined once above)
     dims = agent["dims"] or ["overall"]
     user_p = (f"{context}\nEPISODE SCRIPT (shot list with action/camera/dialogue):\n{script}\n\n"
         f"As the {agent['name']}, review this episode for YOUR domain only. Hold a tough "
