@@ -122,12 +122,43 @@ if (-not (Ensure-EmbeddedPython)) { Die "Cannot continue without a working Pytho
 
 # ---------- 3. PyTorch (vendor-specific) + ComfyUI requirements ----------
 & $PY -m pip install --upgrade pip setuptools wheel 2>&1 | Select-Object -Last 1
+# Map an AMD GPU name to its ROCm Windows wheel index (gfx-architecture specific).
+# $null = no official Windows ROCm wheel for that card -> DirectML fallback.
+function Get-RocmIndex($name) {
+  $n = "$name".ToLower()
+  if ($n -match "9070|9060|rx 90|rdna4")                            { return "https://repo.amd.com/rocm/whl/gfx120X-all/" }    # RDNA4 (RX 9000)
+  if ($n -match "7900|7800|7700|7600|rx 79|rx 78|rx 77|rx 76|w7[89]") { return "https://repo.amd.com/rocm/whl/gfx110X-dgpu/" }  # RDNA3 (RX 7000 / W7000)
+  return $null
+}
+$amdBackendFile = Join-Path $HOMEDIR ".amd_backend"
+$rocmIdx = $null
 if ($vendor -eq "nvidia") {
   Say "installing PyTorch cu128 (NVIDIA, Blackwell-ready, ~2.7GB)..."
   & $PY -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | Select-Object -Last 2
 } elseif ($vendor -eq "amd" -or $vendor -eq "intel") {
-  Say "installing torch-directml ($vendor, DirectML backend)..."
-  & $PY -m pip install torch-directml 2>&1 | Select-Object -Last 2
+  $want = if ($env:BERNIE_AMD_BACKEND) { $env:BERNIE_AMD_BACKEND.ToLower() } else { "rocm" }
+  $rocmOK = $false
+  if ($want -eq "zluda") {
+    Say "BERNIE_AMD_BACKEND=zluda: ZLUDA needs the ComfyUI-Zluda project (see README). Falling back to DirectML here."
+  } elseif ($want -eq "rocm" -and $vendor -eq "amd") {
+    $rocmIdx = Get-RocmIndex $gname
+    if ($rocmIdx) {
+      Say "AMD '$gname' -> trying PyTorch ROCm (BEST AMD path, far faster than DirectML) from $rocmIdx ..."
+      & $PY -m pip install --no-cache-dir --index-url $rocmIdx torch torchvision torchaudio 2>&1 | Select-Object -Last 2
+      try { $chk = (& $PY -c "import torch;print(torch.cuda.is_available())" 2>&1) -join "" } catch { $chk = "" }
+      if ($chk -match "True") { $rocmOK = $true; Say "ROCm ACTIVE (torch.cuda.is_available()=True) - big speedup over DirectML." }
+      else { Say "ROCm did not detect the GPU (unsupported card/old driver?) -> cleaning up + using DirectML."; & $PY -m pip uninstall -y torch torchvision torchaudio 2>&1 | Out-Null }
+    } else {
+      Say "No official Windows ROCm wheel for '$gname'; using DirectML. (For ROCm/ZLUDA options see README.)"
+    }
+  }
+  if ($rocmOK) {
+    Set-Content $amdBackendFile "rocm"
+  } else {
+    Say "installing torch-directml ($vendor DirectML backend; slower, zero-config, works on any AMD/Intel GPU)..."
+    & $PY -m pip install torch-directml 2>&1 | Select-Object -Last 2
+    Set-Content $amdBackendFile "directml"
+  }
 } else {
   Say "installing PyTorch (CPU build)..."
   & $PY -m pip install torch torchvision torchaudio 2>&1 | Select-Object -Last 2
@@ -135,6 +166,14 @@ if ($vendor -eq "nvidia") {
 if (Test-Path (Join-Path $ENG "requirements.txt")) {
   Say "installing ComfyUI requirements..."
   & $PY -m pip install -r (Join-Path $ENG "requirements.txt") 2>&1 | Select-Object -Last 1
+}
+# ROCm: ComfyUI's requirements can silently overwrite the ROCm torch with a CPU build -> re-assert it
+if ($rocmIdx -and (Test-Path $amdBackendFile) -and ((Get-Content $amdBackendFile) -match "rocm")) {
+  try { $chk = (& $PY -c "import torch;print(torch.cuda.is_available())" 2>&1) -join "" } catch { $chk = "" }
+  if ($chk -notmatch "True") {
+    Say "re-asserting ROCm PyTorch (a dependency had overwritten it)..."
+    & $PY -m pip install --no-cache-dir --force-reinstall --index-url $rocmIdx torch torchvision torchaudio 2>&1 | Select-Object -Last 2
+  }
 }
 & $PY -m pip install --upgrade "huggingface_hub" edge-tts pillow numpy soundfile 2>&1 | Out-Null
 

@@ -32,11 +32,15 @@ friends), but the whole system is reusable for any preschool-style show. Everyth
   - 🟢 **NVIDIA (CUDA)** — fully supported & verified, on the **fast PyTorch/CUDA path** (fp8). Works from
     8 GB VRAM; better with more. **Recommended.** *(Optional ~2× speedup: set `BERNIE_FAST_VIDEO=1` to enable
     TeaCache — see flags below.)*
-  - 🟡 **AMD / Intel Arc** — the installer's zero-config path is **DirectML**, which works but is **slow**
-    (can't use fp8 → needs more VRAM; the heavy Wan video step is the weak point). **For much better AMD
-    speed, use ROCm 7.2** — now *official* on Windows for ComfyUI (community reports it's "night-and-day"
-    faster than DirectML) — or [ComfyUI-Zluda](https://github.com/patientx/ComfyUI-Zluda) (CUDA-on-AMD).
-    DirectML is only the legacy fallback. **NVIDIA remains the verified path.**
+  - 🟡 **AMD (Radeon)** — the installer now **auto-tries ROCm** (the *fast* AMD path) for ROCm-supported
+    cards (**RX 7000 / RX 9000 / W7000**), **verifies** the GPU is actually detected, and cleanly
+    **falls back to DirectML** (zero-config but slow) if ROCm isn't available — so it's never worse than
+    before, and much faster when it works. Force a backend with **`BERNIE_AMD_BACKEND=rocm|directml|zluda`**.
+    ROCm is *much* faster than DirectML (community: "night-and-day"); [ComfyUI-Zluda](https://github.com/patientx/ComfyUI-Zluda)
+    is another CUDA-on-AMD option. Needs a recent AMD driver (Python 3.12 is auto-provided).
+    **Honest:** the AMD path is **best-effort / unverified** — it was built from AMD's official docs but
+    *without AMD test hardware*, so NVIDIA/CUDA remains the fully verified path.
+  - 🟡 **Intel Arc** — DirectML (zero-config, slower).
   - ⚪ **No GPU** → CPU mode (extremely slow; testing only).
 - ~70 GB free disk. `git`, `ffmpeg`, and `Ollama` are **auto-installed** if missing (via winget).
 - *(Optional, free)* a [HuggingFace token](https://huggingface.co/settings/tokens) + accepting the

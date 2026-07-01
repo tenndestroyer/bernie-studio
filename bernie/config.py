@@ -94,10 +94,25 @@ GPU_VENDOR = os.environ.get("BERNIE_GPU", _vendor).lower()   # nvidia | amd | in
 VRAM_GB = float(os.environ.get("BERNIE_VRAM_GB", 0) or _vram)
 RAM_GB  = float(os.environ.get("BERNIE_RAM_GB", 0) or _ram_gb())
 
-# Backend: NVIDIA = CUDA (fp8, fast). AMD/Intel = DirectML (fp16 only, slower, best-effort).
+# Backend: NVIDIA = CUDA (fp8, fast). AMD = ROCm (native, fast) if the installer set it up, else
+# DirectML (fp16, slow, zero-config). Intel = DirectML. The installer records the AMD choice in
+# HOME/.amd_backend (see setup.ps1). ROCm presents as a CUDA device, so it needs no --directml flag.
 IS_NVIDIA = GPU_VENDOR == "nvidia"
-COMFY_ARGS = [] if IS_NVIDIA else (["--directml"] if GPU_VENDOR in ("amd", "intel") else ["--cpu"])
-# DirectML/CPU can't do fp8 quantization -> force fp16 ("default") weights everywhere
+_amd_backend = ""
+try:
+    _abf = HOME / ".amd_backend"
+    if _abf.exists():
+        _amd_backend = _abf.read_text(encoding="utf-8").strip().lower()
+except Exception:
+    pass
+IS_ROCM = (GPU_VENDOR == "amd" and _amd_backend == "rocm")
+if IS_NVIDIA or IS_ROCM:
+    COMFY_ARGS = []                          # CUDA / ROCm: native accelerated, no special flag
+elif GPU_VENDOR in ("amd", "intel"):
+    COMFY_ARGS = ["--directml"]
+else:
+    COMFY_ARGS = ["--cpu"]
+# fp8 quantization is NVIDIA-only here; ROCm/DirectML/CPU use fp16 ("default") for reliability
 FLUX_DTYPE = "fp8_e4m3fn" if IS_NVIDIA else "default"
 
 # ---------- quality tier (auto, override with BERNIE_TIER) ----------
@@ -180,7 +195,7 @@ _chain.append("ollama")
 LLM_CHAIN = os.environ.get("BERNIE_LLM_CHAIN", ",".join(_chain)).split(",")
 
 def summary():
-    backend = "CUDA" if IS_NVIDIA else ("DirectML" if GPU_VENDOR in ("amd","intel") else "CPU")
+    backend = "CUDA" if IS_NVIDIA else ("ROCm" if IS_ROCM else ("DirectML" if GPU_VENDOR in ("amd","intel") else "CPU"))
     return (f"Bernie Studio | GPU={GPU_VENDOR} ({backend}) tier={TIER} VRAM={VRAM_GB:.0f}GB "
             f"RAM={RAM_GB:.0f}GB | Wan {WAN_W}x{WAN_H} {WAN_MODEL} {WAN_DTYPE} tiled={WAN_TILED} | "
             f"LLM chain={LLM_CHAIN} local={LOCAL_LLM_MODEL} | HOME={HOME}")
