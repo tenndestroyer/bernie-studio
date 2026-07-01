@@ -32,7 +32,7 @@
   .pill{font-size:12px;color:var(--muted);padding:8px 10px;border:1px solid var(--line);border-radius:10px}
   .pill b{color:var(--text)}
   /* main */
-  .main{padding:22px 26px;overflow:auto}
+  .main{padding:22px 26px 84px;overflow:auto}
   .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:14px;flex-wrap:wrap}
   .topbar h2{margin:0;font-size:22px}
   .top-stats{display:flex;gap:10px;flex-wrap:wrap}
@@ -58,6 +58,16 @@
   .pct{font-size:32px;font-weight:800;color:var(--accent2);min-width:84px;line-height:1;text-align:right}
   .pct small{font-size:16px;color:var(--muted);font-weight:600;margin-left:2px}
   .pct.done{color:var(--good)}
+  /* bottom status bar (live episode progress) */
+  .statusbar{position:fixed;left:230px;right:0;bottom:0;height:60px;background:var(--panel);border-top:1px solid var(--line);
+    display:flex;align-items:center;gap:16px;padding:0 22px;z-index:60;box-shadow:0 -6px 22px rgba(0,0,0,.4)}
+  .statusbar.hidden{display:none}
+  .sb-label{flex:0 0 auto;max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+  .sb-label b{color:var(--text)}
+  .sb-bar{flex:1;height:14px;background:#262b38;border-radius:7px;overflow:hidden}
+  .sb-bar > i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .6s ease}
+  .sb-pct{flex:0 0 auto;font-weight:800;color:var(--accent2);font-size:19px;min-width:54px;text-align:right}
+  .sb-pct.done{color:var(--good)}
   .muted{color:var(--muted)}
   .row{display:flex;align-items:center;gap:10px}
   .between{justify-content:space-between}
@@ -345,6 +355,11 @@
     </section>
   </main>
 </div>
+<div class="statusbar hidden" id="statusbar">
+  <div class="sb-label"><b id="sb-title">—</b> <span id="sb-activity" class="muted"></span></div>
+  <div class="sb-bar"><i id="sb-fill"></i></div>
+  <div class="sb-pct" id="sb-pct">0%</div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -390,6 +405,18 @@ const OPEN=new Set();
 const cssid=s=>String(s).replace(/[^a-z0-9]/gi,'_');
 const PHASE={keyframes:'🖼️ drawing keyframes',video:'🎬 animating video',assembling:'🎞️ assembling + music',done:'✅ done'};
 function phaseLabel(p){return PHASE[p]||p||'working';}
+let LASTEVENT='';
+function updateStatusBar(slots){
+  const sb=$('statusbar'); if(!sb) return;
+  const act=(slots||[]).find(x=>x.active) || (slots||[]).find(x=>!x.final_exists) || (slots||[])[0];
+  if(!act){ sb.classList.add('hidden'); return; }
+  sb.classList.remove('hidden');
+  const pc=(act.pct!=null?act.pct:Math.round(act.frac*100));
+  $('sb-title').textContent=act.title+' ('+act.slot+')';
+  $('sb-activity').textContent='· '+(act.final_exists?'✅ finished':phaseLabel(act.phase))+(LASTEVENT&&!act.final_exists?' · '+LASTEVENT:'');
+  $('sb-fill').style.width=pc+'%';
+  $('sb-pct').textContent=pc+'%'; $('sb-pct').className='sb-pct'+(act.final_exists?' done':'');
+}
 function fmtAge(s){if(s==null)return '';if(s<90)return s+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
 function toggleShots(slot){ if(OPEN.has(slot)){OPEN.delete(slot);const el=$('thumbs-'+cssid(slot));if(el)el.innerHTML='';}
   else {OPEN.add(slot);loadShots(slot);} }
@@ -453,7 +480,7 @@ async function refresh(){
       <div class="thumbs" id="thumbs-${cid}"></div></div>`;
   }).join('');
   OPEN.forEach(loadShots);   // re-populate any expanded grids after the poll re-renders
-  fillSlotSelects(slots); loadEvents();
+  fillSlotSelects(slots); loadEvents(); updateStatusBar(slots);
 }
 
 // ---------------- actions ----------------
@@ -465,7 +492,11 @@ async function createEpisode(){
     scenes:+$('c-scenes').value,target:+$('c-target').value,cycles:+$('c-cycles').value,tier:$('c-tier').value};
   if(!body.premise){toast('Add a premise (or use the Story Builder).');return;}
   const r=await api('/api/create','POST',body);
-  if(r.ok){toast('🎬 Episode "'+r.name+'" started — watch it on the Dashboard.');nav('dashboard');}
+  if(r.ok){toast('🎬 Episode "'+r.name+'" started — watch it on the Dashboard.');
+    const sb=$('statusbar');sb.classList.remove('hidden');
+    $('sb-title').textContent=r.name;$('sb-activity').textContent="· starting — the writers' room is on it…";
+    $('sb-fill').style.width='2%';$('sb-pct').textContent='0%';$('sb-pct').className='sb-pct';
+    LASTEVENT='';nav('dashboard');}
   else toast('Failed: '+(r.error||'unknown'));
 }
 async function startSeries(){const r=await api('/api/series','POST',{});
@@ -537,6 +568,7 @@ async function loadEvents(){
   if(!EVSLOT)return;
   let d; try{d=await api('/api/events?slot='+encodeURIComponent(EVSLOT)+'&since=0');}catch(e){return;}
   const evs=d.events||[]; const ic=l=>l==='warn'?'⚠':l==='error'?'⛔':'·'; const box=$('events');
+  if(evs.length) LASTEVENT=evs[evs.length-1].msg;
   box.textContent=evs.length?evs.slice(-200).map(e=>`${ic(e.level)} [${e.stage}] ${e.msg}`).join('\n')
     :'No activity yet — start an episode to see the pipeline narrate itself.';
   box.scrollTop=box.scrollHeight;

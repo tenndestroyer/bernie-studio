@@ -42,7 +42,10 @@ $tier = if ($env:BERNIE_TIER) { $env:BERNIE_TIER }
         elseif ($vram -ge 11) { "balanced" } else { "low" }
 Say "Detected GPU: $vendor, VRAM=${vram}GB, RAM=${ram}GB  ->  quality tier: $tier"
 if ($vendor -eq "nvidia") { Say "NVIDIA/CUDA backend (fully supported)." }
-elseif ($vendor -eq "amd" -or $vendor -eq "intel") { Say "$vendor GPU -> DirectML backend (EXPERIMENTAL/best-effort; needs more VRAM, no fp8)." }
+elseif ($vendor -eq "amd" -or $vendor -eq "intel") {
+  Say "$vendor GPU -> DirectML backend (zero-config, but SLOW). For MUCH better AMD speed, use ROCm 7.2"
+  Say "   (now official on Windows for ComfyUI) or ComfyUI-Zluda - see README. DirectML is the legacy fallback."
+}
 else { Say "WARNING: no supported GPU detected -> CPU mode (extremely slow; for testing only)." }
 if ($vram -lt 8 -and $vendor -ne "cpu") { Say "WARNING: <8GB VRAM. Rendering will be very slow / may not fit." }
 
@@ -148,6 +151,7 @@ elseif ($vendor -eq "nvidia" -and ($tv -match "cuda=False")) { Say "WARNING: tor
 # ---------- 4. custom nodes ----------
 $CN = Join-Path $ENG "custom_nodes"; New-Item -ItemType Directory -Force -Path $CN | Out-Null
 foreach ($u in @("https://github.com/kijai/ComfyUI-WanVideoWrapper.git",
+                 "https://github.com/welltop-cn/ComfyUI-TeaCache.git",
                  "https://github.com/ltdrdata/ComfyUI-Manager.git")) {
   $n = ($u -split "/")[-1] -replace "\.git$",""
   if (-not (Test-Path (Join-Path $CN $n))) { Say "node: $n"; & git -C $CN clone --depth 1 $u 2>&1 | Out-Null }

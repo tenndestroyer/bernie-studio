@@ -68,12 +68,29 @@ WAN_NEG_BOOST = ("2D, flat, flat shading, hand-drawn, drawing, sketch, anime, li
     "comic, paper cutout, realistic, photorealistic, real animal, detailed realistic fur, jitter, "
     "flicker, strobe, washed out, faded, overexposed, morphing, warping, deformed, melting, blurry")
 
+_TEACACHE_OK = None
+def _teacache_available():
+    """Is the TeaCache accelerator node installed? Cached. Only consulted when FAST_VIDEO is on,
+    so an opted-in-but-missing node degrades to a normal (still correct) render instead of crashing."""
+    global _TEACACHE_OK
+    if _TEACACHE_OK is None:
+        try:
+            info = comfy._get("/object_info")
+            _TEACACHE_OK = isinstance(info, dict) and ("TeaCache" in info)
+        except Exception:
+            _TEACACHE_OK = False
+        if getattr(config, "FAST_VIDEO", False) and not _TEACACHE_OK:
+            print("[pipeline] BERNIE_FAST_VIDEO is on but the TeaCache node isn't installed; rendering normally.")
+    return _TEACACHE_OK
+
 def render_video(shot, key_name, salt=0):
     sid = shot["id"]
     talk = ", characters talking, mouths moving naturally" if shot["dialogue"] else ""
     motion = f"{shot['positive']}. {WAN_3D_BOOST}. {shot['motion']}{talk}"
     neg = shot["negative"] + ", " + WAN_NEG_BOOST
-    wf = workflows.wan_i2v(motion, neg, key_name, seed_for(sid, salt+1), f"vid_{sid}")
+    tc = getattr(config, "FAST_VIDEO", False) and _teacache_available()
+    wf = workflows.wan_i2v(motion, neg, key_name, seed_for(sid, salt+1), f"vid_{sid}",
+                           teacache=tc, tea_thresh=getattr(config, "TEA_THRESH", 0.2))
     frames = comfy.run(wf, timeout=3600)
     if len(frames) < 8: raise RuntimeError(f"too few frames ({len(frames)})")
     out_mp4 = config.SHOTS / f"{sid}.mp4"

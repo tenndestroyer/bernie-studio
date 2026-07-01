@@ -153,6 +153,8 @@ DRIFT_CHECK  = _envbool("BERNIE_DRIFT", False)          # experimental reference
 VOICEPACK    = os.environ.get("BERNIE_VOICEPACK", "bernie")   # configs/voices/<pack>.json
 TTS_WORKERS  = int(os.environ.get("BERNIE_TTS_WORKERS", "4") or 4)
 AUTO_LORA    = _envbool("BERNIE_AUTO_LORA", False)      # series: auto-train+activate a character LoRA after ep1
+FAST_VIDEO   = _envbool("BERNIE_FAST_VIDEO", False)     # opt-in TeaCache accel (~2x Wan; experimental, NVIDIA)
+TEA_THRESH   = float(os.environ.get("BERNIE_TEA_THRESH", "0.2") or 0.2)   # higher = faster, lower quality
 
 # ---------- LLM (free chain; local Ollama guaranteed fallback) ----------
 def _load_keys_env():

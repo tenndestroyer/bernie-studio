@@ -54,7 +54,8 @@ def ace_step(tags, lyrics, seconds, seed, prefix, steps=50, cfg=5.0):
     }
 
 def wan_i2v(motion_positive, negative, start_image_name, seed, prefix,
-            steps=None, cfg=4.0, length=None, w=None, h=None, shift=5.0):
+            steps=None, cfg=4.0, length=None, w=None, h=None, shift=5.0,
+            teacache=False, tea_thresh=0.2):
     w = w or config.WAN_W; h = h or config.WAN_H
     length = length or config.WAN_FRAMES
     steps = steps or config.WAN_STEPS
@@ -64,7 +65,7 @@ def wan_i2v(motion_positive, negative, start_image_name, seed, prefix,
                   "tile_size":256,"overlap":64,"temporal_size":32,"temporal_overlap":8}}
     else:
         decode = {"class_type":"VAEDecode","inputs":{"samples":["37",0],"vae":["32",0]}}
-    return {
+    g = {
         "30": {"class_type":"UNETLoader","inputs":{"unet_name":WAN_UNET,"weight_dtype":config.WAN_DTYPE}},
         "31": {"class_type":"CLIPLoader","inputs":{"clip_name":WAN_CLIP,"type":"wan"}},
         "32": {"class_type":"VAELoader","inputs":{"vae_name":WAN_VAE}},
@@ -80,3 +81,11 @@ def wan_i2v(motion_positive, negative, start_image_name, seed, prefix,
         "38": decode,
         "39": {"class_type":"SaveImage","inputs":{"images":["38",0],"filename_prefix":prefix}},
     }
+    # OPT-IN TeaCache accelerator: patch the diffusion model before sampling (~2x faster).
+    # Only inserted when the caller passes teacache=True AND the TeaCache node exists (checked
+    # by the caller), so the default render path is byte-for-byte unchanged.
+    if teacache:
+        g["45"] = {"class_type":"TeaCache","inputs":{"model":["30",0],"rel_l1_thresh":float(tea_thresh),
+                   "start_percent":0.0,"end_percent":1.0,"cache_device":"cuda"}}
+        g["40"]["inputs"]["model"] = ["45", 0]   # ModelSamplingSD3 now reads the TeaCache-patched model
+    return g

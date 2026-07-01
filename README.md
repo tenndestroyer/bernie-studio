@@ -29,12 +29,14 @@ friends), but the whole system is reusable for any preschool-style show. Everyth
 ## 🖥️ Requirements
 
 - **Windows 10/11** with a GPU. It **auto-detects your GPU vendor** and configures itself:
-  - 🟢 **NVIDIA (CUDA)** — fully supported & verified. Works from 8 GB VRAM; better with more. **Recommended.**
-  - 🟡 **AMD / Intel Arc (DirectML)** — supported **best-effort / experimental**. The installer sets up
-    `torch-directml` and launches with `--directml` automatically. Honest caveats: it's **slower**, can't
-    use fp8 (so it needs **more VRAM** — fp16 weights), and the heavy **Wan video** model may be slow or
-    not fully supported on DirectML. Image generation (Flux) generally works. For better AMD performance,
-    the community [ComfyUI-Zluda](https://github.com/patientx/ComfyUI-Zluda) (CUDA-on-AMD) is an alternative.
+  - 🟢 **NVIDIA (CUDA)** — fully supported & verified, on the **fast PyTorch/CUDA path** (fp8). Works from
+    8 GB VRAM; better with more. **Recommended.** *(Optional ~2× speedup: set `BERNIE_FAST_VIDEO=1` to enable
+    TeaCache — see flags below.)*
+  - 🟡 **AMD / Intel Arc** — the installer's zero-config path is **DirectML**, which works but is **slow**
+    (can't use fp8 → needs more VRAM; the heavy Wan video step is the weak point). **For much better AMD
+    speed, use ROCm 7.2** — now *official* on Windows for ComfyUI (community reports it's "night-and-day"
+    faster than DirectML) — or [ComfyUI-Zluda](https://github.com/patientx/ComfyUI-Zluda) (CUDA-on-AMD).
+    DirectML is only the legacy fallback. **NVIDIA remains the verified path.**
   - ⚪ **No GPU** → CPU mode (extremely slow; testing only).
 - ~70 GB free disk. `git`, `ffmpeg`, and `Ollama` are **auto-installed** if missing (via winget).
 - *(Optional, free)* a [HuggingFace token](https://huggingface.co/settings/tokens) + accepting the
@@ -99,7 +101,10 @@ Optional flags (all off by default): `BERNIE_INTERP=1` (smoother motion via inte
 (use `configs/voices/mypack.json`), `BERNIE_LIPSYNC=1` (opt-in lip-sync post-pass — needs a
 Wav2Lip/LatentSync model installed), `BERNIE_DRIFT=1` (experimental reference on-model check),
 `BERNIE_AUTO_LORA=1` (series auto-trains + activates a character LoRA after episode 1, if a trainer
-is installed — the biggest hands-off consistency win).
+is installed — the biggest hands-off consistency win),
+`BERNIE_FAST_VIDEO=1` (**NVIDIA only, experimental**: enable the TeaCache accelerator for ~2× faster Wan
+video with little quality loss; auto-installed, and safely ignored if the node is missing — if a shot
+ever fails, turn it back off).
 
 It's **dependency-free** (Python stdlib only — no Electron, no npm, no CDN; works offline) and binds to
 `127.0.0.1` only. The old CLI still works for power users (`python make.py …`), and the app's
